@@ -25,7 +25,7 @@ flashcard-generator/
 │   └── src/
 │       ├── App.js                     # ✅ Imports and renders MobileFlashcardGenerator
 │       ├── index.js                   # ✅ ReactDOM render to #root
-│       └── MobileFlashcardGenerator.js  # ✅ Your full frontend code you posted
+│       └── MobileFlashcardGenerator.js  # ✅ Full frontend code
 │
 ├── server/                            # ✅ Node.js + Express Backend
 │   ├── .env.sample                    # ✅ Contains: OPENAI_API_KEY
