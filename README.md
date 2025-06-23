@@ -14,20 +14,27 @@ An AI-powered mobile-friendly Flashcard Generator built with **React.js (Fronten
 
 ```
 flashcard-generator/
-├── client/             # React frontend
-│   ├── src/
-│   │   ├── App.js
-│   │   ├── index.js
-│   │   └── MobileFlashcardGenerator.js
+│
+├── README.md                          # ✅ Custom full README with deploy guide
+│
+├── client/                            # ✅ React Frontend
+│   ├── .env.sample                    # ✅ Contains: REACT_APP_API_URL
+│   ├── package.json                   # ✅ React dependencies
 │   ├── public/
-│   ├── package.json
-│   └── .env.sample
-├── server/             # Node.js backend
-│   ├── server.js
-│   ├── package.json
-│   ├── uploads/
-│   └── .env.sample
-└── README.md           # This file
+│   │   └── index.html                 # (default React public file)
+│   └── src/
+│       ├── App.js                     # ✅ Imports and renders MobileFlashcardGenerator
+│       ├── index.js                   # ✅ ReactDOM render to #root
+│       └── MobileFlashcardGenerator.js  # ✅ Your full frontend code you posted
+│
+├── server/                            # ✅ Node.js + Express Backend
+│   ├── .env.sample                    # ✅ Contains: OPENAI_API_KEY
+│   ├── package.json                   # ✅ Backend dependencies
+│   ├── server.js                      # ✅ Handles PDF, Voice (Whisper), GPT flashcard generation
+│   └── uploads/                       # ✅ Multer destination folder (auto-created)
+│
+└── .gitignore                         # ✅ Node, React ignore (node_modules, .env, build, etc.)
+
 ```
 
 ---
