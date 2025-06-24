@@ -20,8 +20,8 @@ const openai = new OpenAIApi(new Configuration({
 }));
 
 const generateFlashcards = async (content) => {
-  const prompt = \`Summarize and generate 5 flashcards from this content. 
-  Each flashcard format: { "question": "...", "answer": "...", "difficulty": "Easy/Medium/Hard" }\nContent: \${content}\`;
+  const prompt = `Summarize and generate 5 flashcards from this content. 
+  Each flashcard format: { "question": "...", "answer": "...", "difficulty": "Easy/Medium/Hard" }\nContent: \${content}\ `;
   const completion = await openai.createChatCompletion({
     model: "gpt-4o",
     messages: [{ role: "user", content: prompt }],
