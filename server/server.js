@@ -5,7 +5,7 @@ const cors = require('cors');
 const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const fs = require('fs');
-const { Configuration, OpenAIApi } = require('openai');
+const OpenAI = require('openai');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -15,9 +15,9 @@ app.use(express.json());
 
 const upload = multer({ dest: 'uploads/' });
 
-const openai = new OpenAIApi(new Configuration({
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
-}));
+});
 
 const generateFlashcards = async (content) => {
   const prompt = `Summarize and generate 5 flashcards from this content. 
