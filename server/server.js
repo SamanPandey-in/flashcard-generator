@@ -57,4 +57,4 @@ app.post('/generate-flashcards/voice', upload.single('file'), async (req, res) =
   res.json({ flashcards });
 });
 
-app.listen(port, () => console.log(\`Server running on port \${port}\`));
+app.listen(port, () => console.log(`Server running on port ${port}`));
