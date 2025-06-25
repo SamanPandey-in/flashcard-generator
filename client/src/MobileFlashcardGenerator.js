@@ -19,6 +19,7 @@ const MobileFlashcardGenerator = () => {
 
 const processContent = async (content, type, file = null) => {
   setIsGenerating(true);
+  console.log("API URL:", API_URL); // ✅ Log the current API endpoint
 
   try {
     let response;
@@ -44,6 +45,8 @@ const processContent = async (content, type, file = null) => {
     }
 
     const data = await response.json();
+    console.log("API Response:", data); // ✅ See the actual response
+
     setFlashcards(prev => [...prev, ...data.flashcards]);
 
   } catch (error) {
