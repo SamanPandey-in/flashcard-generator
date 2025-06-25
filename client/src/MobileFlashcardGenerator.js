@@ -1,3 +1,5 @@
+REACT_APP_API_URL=https://flashcard-generator-tvst.onrender.com
+
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, Mic, Play, RotateCcw, Shuffle, Download, Trash2, Edit3, Check, X, Menu, ChevronLeft, ChevronRight } from 'lucide-react';
 
