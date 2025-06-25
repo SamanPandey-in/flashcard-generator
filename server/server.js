@@ -1,11 +1,11 @@
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const fs = require('fs');
-const OpenAI = require('openai');
+const path = require('path');
+const { OpenAI } = require('openai'); // ✅ Correct way to import OpenAI
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -19,42 +19,69 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// ✅ Fix: Template literal backtick + removed \ that caused SyntaxError
 const generateFlashcards = async (content) => {
-  const prompt = `Summarize and generate 5 flashcards from this content. 
-  Each flashcard format: { "question": "...", "answer": "...", "difficulty": "Easy/Medium/Hard" }\nContent: \${content}\ `;
-  const completion = await openai.createChatCompletion({
+  const prompt = `Summarize and generate 5 flashcards from this content.
+Each flashcard format: { "question": "...", "answer": "...", "difficulty": "Easy/Medium/Hard" }
+Content: ${content}`;
+
+  const completion = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [{ role: "user", content: prompt }],
     temperature: 0.7,
   });
-  const rawText = completion.data.choices[0].message.content;
+
+  const rawText = completion.choices[0].message.content;
   const jsonStart = rawText.indexOf('[');
   const jsonEnd = rawText.lastIndexOf(']') + 1;
-  return JSON.parse(rawText.substring(jsonStart, jsonEnd));
+  const jsonString = rawText.substring(jsonStart, jsonEnd);
+
+  return JSON.parse(jsonString);
 };
 
 app.post('/generate-flashcards', async (req, res) => {
-  const { type, content } = req.body;
-  if (type !== 'text') return res.status(400).json({ error: 'Invalid type' });
-  const flashcards = await generateFlashcards(content);
-  res.json({ flashcards });
+  try {
+    const { type, content } = req.body;
+    if (type !== 'text') return res.status(400).json({ error: 'Invalid type' });
+
+    const flashcards = await generateFlashcards(content);
+    res.json({ flashcards });
+  } catch (error) {
+    console.error('Error generating from text:', error);
+    res.status(500).json({ error: 'Failed to generate flashcards' });
+  }
 });
 
 app.post('/generate-flashcards/pdf', upload.single('file'), async (req, res) => {
-  const data = await pdfParse(fs.readFileSync(req.file.path));
-  const flashcards = await generateFlashcards(data.text.slice(0, 3000));
-  fs.unlinkSync(req.file.path);
-  res.json({ flashcards });
+  try {
+    const data = await pdfParse(fs.readFileSync(req.file.path));
+    const flashcards = await generateFlashcards(data.text.slice(0, 3000));
+    fs.unlinkSync(req.file.path);
+    res.json({ flashcards });
+  } catch (error) {
+    console.error('Error generating from PDF:', error);
+    res.status(500).json({ error: 'Failed to generate flashcards from PDF' });
+  }
 });
 
 app.post('/generate-flashcards/voice', upload.single('file'), async (req, res) => {
-  const transcript = await openai.createTranscription(
-    fs.createReadStream(req.file.path),
-    "whisper-1"
-  );
-  const flashcards = await generateFlashcards(transcript.data.text);
-  fs.unlinkSync(req.file.path);
-  res.json({ flashcards });
+  try {
+    const transcript = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(req.file.path),
+      model: "whisper-1"
+    });
+
+    const flashcards = await generateFlashcards(transcript.text);
+    fs.unlinkSync(req.file.path);
+    res.json({ flashcards });
+  } catch (error) {
+    console.error('Error generating from voice:', error);
+    res.status(500).json({ error: 'Failed to generate flashcards from voice' });
+  }
 });
 
-app.listen(port, () => console.log(`Server running on port ${port}`));
+app.get('/', (req, res) => {
+  res.send("Flashcard Generator Backend is Running 🚀");
+});
+
+app.listen(port, () => console.log(`✅ Server running on port ${port}`));
