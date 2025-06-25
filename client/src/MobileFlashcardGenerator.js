@@ -15,37 +15,45 @@ const MobileFlashcardGenerator = () => {
   const [showMenu, setShowMenu] = useState(false);
   const fileInputRef = useRef(null);
 
-  const API_URL = process.env.REACT_APP_API_URL;
+  const API_URL = process.env.REACT_APP_API_URL || 'https://your-backend.onrender.com';
 
-  const processContent = async (content, type, file = null) => {
-    setIsGenerating(true);
+const processContent = async (content, type, file = null) => {
+  setIsGenerating(true);
 
-    try {
-      let response;
-      if (type === 'text') {
-        response = await fetch(`${API_URL}/generate-flashcards`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, content })
-        });
-      } else if (type === 'pdf' || type === 'voice') {
-        const formData = new FormData();
-        formData.append('file', file);
+  try {
+    let response;
 
-        response = await fetch(`${API_URL}/generate-flashcards/${type}`, {
-          method: 'POST',
-          body: formData
-        });
-      }
+    if (type === 'text') {
+      response = await fetch(`${API_URL}/generate-flashcards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, content })
+      });
+    } else if (type === 'pdf' || type === 'voice') {
+      const formData = new FormData();
+      formData.append('file', file);
 
-      const data = await response.json();
-      setFlashcards(prev => [...prev, ...data.flashcards]);
-    } catch (error) {
-      console.error('Error generating flashcards:', error);
-    } finally {
-      setIsGenerating(false);
+      response = await fetch(`${API_URL}/generate-flashcards/${type}`, {
+        method: 'POST',
+        body: formData
+      });
     }
-  };
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    setFlashcards(prev => [...prev, ...data.flashcards]);
+
+  } catch (error) {
+    console.error('Error generating flashcards:', error);
+    alert("Failed to generate flashcards. Please try again.");
+  } finally {
+    setIsGenerating(false);
+  }
+};
+
 
   const handleTextSubmit = () => {
     if (textInput.trim()) {
