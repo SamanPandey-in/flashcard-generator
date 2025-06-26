@@ -21,13 +21,21 @@ const generateFlashcards = async (content) => {
 Each flashcard format: { "question": "...", "answer": "...", "difficulty": "Easy/Medium/Hard" }
 Content: ${content}`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.7,
-  });
+  const response = await axios.post(
+    'https://api.together.xyz/v1/chat/completions',
+    {
+      model: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free',
+      messages: [{ role: 'user', content: prompt }],
+    },
+    {
+      headers: {
+        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
 
-  const rawText = completion.choices[0].message.content;
+  const rawText = response.data.choices[0].message.content;
   const jsonStart = rawText.indexOf('[');
   const jsonEnd = rawText.lastIndexOf(']') + 1;
   const jsonString = rawText.substring(jsonStart, jsonEnd);
