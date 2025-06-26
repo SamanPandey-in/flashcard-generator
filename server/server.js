@@ -5,7 +5,8 @@ const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const fs = require('fs');
 const path = require('path');
-const { OpenAI } = require('openai'); // ✅ Correct way to import OpenAI
+const axios = require('axios');
+
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -15,11 +16,6 @@ app.use(express.json());
 
 const upload = multer({ dest: 'uploads/' });
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-// ✅ Fix: Template literal backtick + removed \ that caused SyntaxError
 const generateFlashcards = async (content) => {
   const prompt = `Summarize and generate 5 flashcards from this content.
 Each flashcard format: { "question": "...", "answer": "...", "difficulty": "Easy/Medium/Hard" }
