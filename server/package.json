@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
-    "together-ai": "^1.0.7",
-    "formidable": "^2.1.1",
-    "pdf-parse": "^1.1.1",
-    "dotenv": "^16.0.3"
+    "axios": "^1.6.8",
+    "dotenv": "^16.4.5"
   }
 }
