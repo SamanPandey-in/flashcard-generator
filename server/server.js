@@ -1,4 +1,6 @@
 require('dotenv').config();
+console.log("Current API Key:", process.env.DEEPSEEK_API_KEY); // or DEEPSEEK_API_KEY
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
