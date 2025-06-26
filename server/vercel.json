@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/index.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/generate-flashcards", "dest": "/api/index.js" },
+    { "src": "/generate-flashcards/pdf", "dest": "/api/index.js" },
+    { "src": "/generate-flashcards/voice", "dest": "/api/index.js" },
+    { "src": "/", "dest": "/api/index.js" }
+  ]
+}
