@@ -1,17 +1,14 @@
 import axios from 'axios';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Only POST requests allowed' });
   }
 
   const { type, content } = req.body;
 
-  if (type !== 'text' || !content) {
-    return res.status(400).json({ error: 'Invalid input type or content' });
+  if (!content || type !== 'text') {
+    return res.status(400).json({ error: 'Invalid input or unsupported type' });
   }
 
   try {
@@ -23,13 +20,13 @@ Content: ${content}`;
       'https://api.together.xyz/v1/chat/completions',
       {
         model: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free',
-        messages: [{ role: 'user', content: prompt }]
+        messages: [{ role: 'user', content: prompt }],
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
+          'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
       }
     );
 
@@ -39,9 +36,10 @@ Content: ${content}`;
     const jsonString = rawText.substring(jsonStart, jsonEnd);
     const flashcards = JSON.parse(jsonString);
 
-    res.status(200).json({ flashcards });
+    return res.status(200).json({ flashcards });
+
   } catch (error) {
-    console.error('❌ API error:', error?.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to generate flashcards' });
+    console.error("Error in API:", error);
+    return res.status(500).json({ error: 'Failed to generate flashcards' });
   }
 }
