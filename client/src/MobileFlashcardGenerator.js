@@ -15,7 +15,7 @@ const MobileFlashcardGenerator = () => {
   const [showMenu, setShowMenu] = useState(false);
   const fileInputRef = useRef(null);
 
-  const API_URL = process.env.REACT_APP_API_URL || 'https://your-backend.onrender.com';
+  const API_URL = process.env.REACT_APP_API_URL || 'https://flashcard-generator-mkob.vercel.app/';
 
 const processContent = async (content, type, file = null) => {
   setIsGenerating(true);
