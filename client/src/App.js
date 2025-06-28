@@ -1,8 +1,12 @@
 import React from 'react';
 import MobileFlashcardGenerator from './MobileFlashcardGenerator';
 
-console.log("API_URL:", process.env.REACT_APP_API_URL); 
-
-const App = () => <MobileFlashcardGenerator />;
+function App() {
+  return (
+    <div className="App">
+      <MobileFlashcardGenerator />
+    </div>
+  );
+}
 
 export default App;
