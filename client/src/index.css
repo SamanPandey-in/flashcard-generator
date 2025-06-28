@@ -1,11 +1,11 @@
-/* Reset some default browser styles */
+/* Resetting some default browser styles */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* Set base font and background */
+/* Setting base font and background */
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: linear-gradient(to bottom right, #f3e8ff, #e0f2fe);
@@ -14,7 +14,7 @@ body {
   overflow-x: hidden;
 }
 
-/* Make text inputs & buttons cleaner */
+/* Making text inputs & buttons cleaner */
 input[type="text"],
 textarea {
   font-size: 1rem;
