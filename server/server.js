@@ -47,8 +47,6 @@ const CONFIG = {
   ],
   ALLOWED_PDF_TYPES: ['application/pdf'],
   CORS_ORIGINS: process.env.CORS_ORIGINS?.split(',') || [
-    'http://localhost:3000', 
-    'http://localhost:3001',
     'https://flashcard-generator-flame.vercel.app'
   ]
 };
