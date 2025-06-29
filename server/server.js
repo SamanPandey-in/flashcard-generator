@@ -60,7 +60,24 @@ app.use(helmet({
 app.use(compression());
 
 app.use(cors({
-  origin: CONFIG.CORS_ORIGINS,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (CONFIG.CORS_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // For development, also allow localhost
+    if (origin && origin.includes('localhost')) {
+      return callback(null, true);
+    }
+    
+    console.log('CORS blocked origin:', origin);
+    console.log('Allowed origins:', CONFIG.CORS_ORIGINS);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
