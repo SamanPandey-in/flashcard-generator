@@ -191,14 +191,15 @@ const createMulterConfig = async () => {
   });
 };
 
-// Enhanced AI service class
-class GrokAIService {
+// Enhanced Groq AI service class (CORRECTED FOR GROQ AI)
+class GroqAIService {
   constructor() {
-    this.apiUrl = 'https://api.x.ai/v1/chat/completions';
-    this.apiKey = process.env.GROK_API_KEY;
+    // CORRECTED: Using Groq AI endpoint
+    this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+    this.apiKey = process.env.GROQ_API_KEY; // CORRECTED: Environment variable name
     
     if (!this.apiKey) {
-      Logger.error('GROK_API_KEY environment variable is required');
+      Logger.error('GROQ_API_KEY environment variable is required');
       throw new Error('Missing API key configuration');
     }
   }
@@ -260,7 +261,8 @@ Guidelines:
           content: `Generate flashcards from this ${sourceType} content:\n\n${content}`
         }
       ],
-      model: "grok-beta",
+      // CORRECTED: Using Groq AI supported models
+      model: "llama-3.3-70b-versatile", // You can also use: mixtral-8x7b-32768, llama-3.1-70b-versatile
       temperature: 0.7,
       max_tokens: 3000
     };
@@ -476,10 +478,15 @@ class AudioTranscriptionService {
       });
 
       // TODO: Integrate with actual speech-to-text service
-      // This is a placeholder implementation
+      // For Groq AI, you might want to use Whisper API or another transcription service
+      // Groq doesn't provide audio transcription directly
       
       const placeholderText = `This is a placeholder transcription for "${originalName}". 
-      
+      To implement actual audio transcription, consider integrating:
+      - OpenAI Whisper API
+      - Google Cloud Speech-to-Text
+      - Assembly AI
+      - Or another speech transcription service
 
 File processed: ${originalName} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`;
 
@@ -502,7 +509,7 @@ File processed: ${originalName} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`;
 }
 
 // Initialize services
-const grokAI = new GrokAIService();
+const groqAI = new GroqAIService(); // CORRECTED: Variable name
 let upload;
 
 // Initialize multer after ensuring directory exists
@@ -537,13 +544,14 @@ app.get('/', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     environment: NODE_ENV,
+    aiProvider: 'Groq AI', // CORRECTED: Updated provider name
     endpoints: {
       'POST /generate-flashcards': 'Generate flashcards from text',
       'POST /generate-flashcards/pdf': 'Generate flashcards from PDF file',
       'POST /generate-flashcards/voice': 'Generate flashcards from audio recording'
     },
     features: [
-      'AI-powered flashcard generation (Grok AI)',
+      'AI-powered flashcard generation (Groq AI)', // CORRECTED
       'PDF text extraction with validation',
       'Audio transcription (placeholder)',
       'Multiple difficulty levels',
@@ -580,7 +588,7 @@ app.post('/generate-flashcards', async (req, res) => {
       ));
     }
 
-    const flashcards = await grokAI.generateFlashcards(content, 'text');
+    const flashcards = await groqAI.generateFlashcards(content, 'text'); // CORRECTED
     
     res.json(createSuccessResponse(flashcards, 'text', {
       contentLength: content.length
@@ -630,7 +638,7 @@ app.post('/generate-flashcards/pdf', async (req, res) => {
           req.file.originalname
         );
         
-        const flashcards = await grokAI.generateFlashcards(text, 'PDF');
+        const flashcards = await groqAI.generateFlashcards(text, 'PDF'); // CORRECTED
 
         res.json(createSuccessResponse(flashcards, 'pdf', {
           originalFile: req.file.originalname,
@@ -696,7 +704,7 @@ app.post('/generate-flashcards/voice', async (req, res) => {
           req.file.originalname
         );
         
-        const flashcards = await grokAI.generateFlashcards(text, 'voice recording');
+        const flashcards = await groqAI.generateFlashcards(text, 'voice recording'); // CORRECTED
 
         res.json(createSuccessResponse(flashcards, 'voice', {
           originalFile: req.file.originalname,
@@ -809,7 +817,7 @@ const startServer = async () => {
       Logger.info('Server configuration', {
         port: PORT,
         environment: NODE_ENV,
-        apiKey: process.env.GROK_API_KEY ? '✅ Connected' : '❌ Missing',
+        apiKey: process.env.GROQ_API_KEY ? '✅ Connected' : '❌ Missing', // CORRECTED
         corsOrigins: CONFIG.CORS_ORIGINS,
         maxFileSize: `${CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB`,
         maxContentLength: CONFIG.MAX_CONTENT_LENGTH,
