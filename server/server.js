@@ -49,7 +49,7 @@ const CONFIG = {
   CORS_ORIGINS: process.env.CORS_ORIGINS?.split(',') || [
     'http://localhost:3000', 
     'http://localhost:3001',
-    'https://your-frontend-domain.com'
+    'https://flashcard-generator-flame.vercel.app'
   ]
 };
 
