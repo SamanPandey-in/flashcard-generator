@@ -138,7 +138,7 @@ MIT License
 
 ## 👨‍💻 Author
 
-Built by Saman Pandey and Ruturaj Rajwade with ❤️ and OpenAI APIs.
+Built by Saman Pandey with ❤️ and OpenAI APIs.
 
 ---
 
