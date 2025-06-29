@@ -728,3 +728,4 @@ const MobileFlashcardGenerator = () => {
 };
 
 export default MobileFlashcardGenerator;
+//End
