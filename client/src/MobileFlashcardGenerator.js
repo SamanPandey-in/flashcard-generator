@@ -21,7 +21,7 @@ const MobileFlashcardGenerator = () => {
   const fileInputRef = useRef(null);
   const recordingTimerRef = useRef(null);
 
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+  const API_URL = process.env.REACT_APP_API_URL || 'https://flashcard-generator-su3s.vercel.app';
 
   // Test API connection on component mount
   React.useEffect(() => {
