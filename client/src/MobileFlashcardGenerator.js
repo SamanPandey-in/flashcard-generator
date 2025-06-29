@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, Mic, Play, RotateCcw, Shuffle, Download, Trash2, Edit3, Check, X, Menu, ChevronLeft, ChevronRight, Square } from 'lucide-react';
+import { Upload, FileText, Mic, Play, RotateCcw, Shuffle, Download, Trash2, Edit3, Check, X, Menu, ChevronLeft, ChevronRight, Square, AlertCircle } from 'lucide-react';
 
 const MobileFlashcardGenerator = () => {
   const [activeTab, setActiveTab] = useState('text');
@@ -16,63 +16,184 @@ const MobileFlashcardGenerator = () => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
+  const [error, setError] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('unknown');
   const fileInputRef = useRef(null);
   const recordingTimerRef = useRef(null);
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
+  // Test API connection on component mount
+  React.useEffect(() => {
+    testConnection();
+  }, []);
+
+  const testConnection = async () => {
+    try {
+      console.log("Testing connection to:", API_URL);
+      const response = await fetch(`${API_URL}/`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Connection successful:", data);
+        setConnectionStatus('connected');
+      } else {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      setConnectionStatus('failed');
+      setError(`Cannot connect to server at ${API_URL}. ${error.message}`);
+    }
+  };
+
+  const showError = (message) => {
+    setError(message);
+    setTimeout(() => setError(null), 8000); // Clear error after 8 seconds
+  };
+
   const processContent = async (content, type, file = null) => {
     setIsGenerating(true);
-    console.log("API URL:", API_URL);
+    setError(null);
+    console.log("Processing content:", { type, contentLength: content?.length, fileName: file?.name });
 
     try {
       let response;
+      let url;
 
       if (type === 'text') {
-        response = await fetch(`${API_URL}/generate-flashcards`, {
+        url = `${API_URL}/generate-flashcards`;
+        console.log("Making text request to:", url);
+        
+        response = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, content })
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ content })
         });
       } else if (type === 'pdf' || type === 'voice') {
         const formData = new FormData();
         formData.append('file', file);
+        
+        url = `${API_URL}/generate-flashcards/${type}`;
+        console.log("Making file request to:", url);
 
-        response = await fetch(`${API_URL}/generate-flashcards/${type}`, {
+        response = await fetch(url, {
           method: 'POST',
           body: formData
         });
       }
 
+      console.log("Response status:", response.status);
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+
+      // Get response text first to handle both JSON and plain text errors
+      const responseText = await response.text();
+      console.log("Raw response:", responseText);
+
       if (!response.ok) {
-        throw new Error(`Server error: ${response.statusText}`);
+        let errorMessage;
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMessage = errorData.message || errorData.error || `Server error: ${response.status}`;
+          if (errorData.details) {
+            errorMessage += ` - ${errorData.details}`;
+          }
+        } catch {
+          errorMessage = `Server error (${response.status}): ${responseText || response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
-      console.log("API Response:", data);
+      // Parse successful response
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("Failed to parse JSON response:", parseError);
+        throw new Error("Invalid response format from server");
+      }
 
-      setFlashcards(prev => [...prev, ...data.flashcards]);
+      console.log("Parsed response data:", data);
+
+      if (!data.flashcards || !Array.isArray(data.flashcards)) {
+        throw new Error("Invalid response: missing or invalid flashcards array");
+      }
+
+      if (data.flashcards.length === 0) {
+        throw new Error("No flashcards were generated. Try providing more detailed content.");
+      }
+
+      // Validate flashcard structure
+      const validFlashcards = data.flashcards.filter(card => 
+        card && card.question && card.answer && card.id
+      );
+
+      if (validFlashcards.length === 0) {
+        throw new Error("Generated flashcards have invalid format");
+      }
+
+      setFlashcards(prev => [...prev, ...validFlashcards]);
+      
+      console.log(`Successfully generated ${validFlashcards.length} flashcards`);
 
     } catch (error) {
       console.error('Error generating flashcards:', error);
-      alert("Failed to generate flashcards. Please try again.");
+      
+      // More specific error messages
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        showError(`Network error: Cannot reach server at ${API_URL}. Please check if your backend is running.`);
+      } else if (error.message.includes('429')) {
+        showError("Rate limit exceeded. Please wait a moment before trying again.");
+      } else if (error.message.includes('401')) {
+        showError("Authentication error. Please check your API key configuration.");
+      } else if (error.message.includes('timeout')) {
+        showError("Request timed out. Please try with shorter content.");
+      } else {
+        showError(error.message || "An unexpected error occurred. Please try again.");
+      }
     } finally {
       setIsGenerating(false);
     }
   };
 
   const handleTextSubmit = () => {
-    if (textInput.trim()) {
-      processContent(textInput, 'text');
-      setTextInput('');
+    if (!textInput.trim()) {
+      showError("Please enter some text content first.");
+      return;
     }
+    
+    if (textInput.length > 50000) {
+      showError("Text is too long. Please limit to 50,000 characters or less.");
+      return;
+    }
+    
+    processContent(textInput, 'text');
+    setTextInput('');
   };
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
-    if (file && file.type === 'application/pdf') {
-      processContent(null, 'pdf', file);
+    if (!file) return;
+    
+    console.log("File selected:", { name: file.name, type: file.type, size: file.size });
+    
+    if (file.type !== 'application/pdf') {
+      showError("Please select a PDF file only.");
+      return;
     }
+    
+    if (file.size > 25 * 1024 * 1024) { // 25MB
+      showError("File is too large. Please select a PDF smaller than 25MB.");
+      return;
+    }
+    
+    processContent(null, 'pdf', file);
   };
 
   const startRecording = async () => {
@@ -84,6 +205,7 @@ const MobileFlashcardGenerator = () => {
       setAudioChunks([]);
       setIsRecording(true);
       setRecordingTime(0);
+      setError(null);
 
       // Start recording timer
       recordingTimerRef.current = setInterval(() => {
@@ -109,7 +231,7 @@ const MobileFlashcardGenerator = () => {
       recorder.start();
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      alert('Could not access microphone. Please check permissions.');
+      showError(`Could not access microphone: ${error.message}. Please check permissions.`);
       setIsRecording(false);
     }
   };
@@ -210,9 +332,53 @@ const MobileFlashcardGenerator = () => {
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3">
           <h1 className="text-xl font-bold text-gray-900">Flashcard Generator</h1>
-          <p className="text-sm text-gray-600">Create flashcards from text, PDF, or voice</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">Create flashcards from text, PDF, or voice</p>
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-green-500' : 
+                connectionStatus === 'failed' ? 'bg-red-500' : 'bg-yellow-500'
+              }`}></div>
+              <span className="text-xs text-gray-500">
+                {connectionStatus === 'connected' ? 'Connected' : 
+                 connectionStatus === 'failed' ? 'Disconnected' : 'Connecting...'}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 m-4 rounded">
+          <div className="flex">
+            <AlertCircle className="w-5 h-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Connection Status Warning */}
+      {connectionStatus === 'failed' && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 m-4 rounded">
+          <div className="flex">
+            <AlertCircle className="w-5 h-5 text-yellow-400 mr-3 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-yellow-700">
+                Server connection failed. Please make sure your backend is running on {API_URL}
+              </p>
+              <button 
+                onClick={testConnection}
+                className="mt-2 text-sm bg-yellow-100 hover:bg-yellow-200 px-3 py-1 rounded"
+              >
+                Retry Connection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="bg-white border-b">
@@ -268,9 +434,19 @@ const MobileFlashcardGenerator = () => {
                   placeholder="Paste your text here (notes, articles, study material)..."
                   className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-xs text-gray-500">
+                    {textInput.length}/50,000 characters
+                  </span>
+                  {textInput.length > 45000 && (
+                    <span className="text-xs text-orange-600">
+                      Approaching limit
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={handleTextSubmit}
-                  disabled={!textInput.trim() || isGenerating}
+                  disabled={!textInput.trim() || isGenerating || connectionStatus === 'failed'}
                   className="mt-3 w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-medium disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
                 >
                   {isGenerating ? 'Generating...' : 'Generate Flashcards'}
@@ -301,11 +477,14 @@ const MobileFlashcardGenerator = () => {
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isGenerating}
+                    disabled={isGenerating || connectionStatus === 'failed'}
                     className="bg-blue-600 text-white py-2 px-4 rounded-lg font-medium disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
                   >
                     {isGenerating ? 'Processing...' : 'Choose File'}
                   </button>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Maximum file size: 25MB
+                  </p>
                 </div>
               </div>
             </div>
@@ -348,7 +527,7 @@ const MobileFlashcardGenerator = () => {
                   
                   <button
                     onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isGenerating}
+                    disabled={isGenerating || connectionStatus === 'failed'}
                     className={`py-3 px-6 rounded-lg font-medium transition-colors ${
                       isRecording
                         ? 'bg-red-600 text-white hover:bg-red-700'
@@ -360,7 +539,7 @@ const MobileFlashcardGenerator = () => {
                   
                   {!isRecording && (
                     <p className="text-xs text-gray-500 mt-2">
-                      Tap and hold to record, release to stop
+                      Note: Audio transcription uses placeholder functionality
                     </p>
                   )}
                 </div>

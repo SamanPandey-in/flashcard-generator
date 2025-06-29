@@ -191,13 +191,12 @@ const createMulterConfig = async () => {
   });
 };
 
-// Enhanced Groq AI service class (CORRECTED FOR GROQ AI)
+// Enhanced Groq AI service class (CORRECTED FOR GROQ AI) Modified
 class GroqAIService {
   constructor() {
-    // CORRECTED: Using Groq AI endpoint
     this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    this.apiKey = process.env.GROQ_API_KEY; // CORRECTED: Environment variable name
-    
+    this.apiKey = process.env.GROQ_API_KEY;
+
     if (!this.apiKey) {
       Logger.error('GROQ_API_KEY environment variable is required');
       throw new Error('Missing API key configuration');
@@ -206,6 +205,9 @@ class GroqAIService {
 
   async generateFlashcards(content, sourceType = 'text') {
     try {
+      // Sanitize content
+      content = content.replace(/[^ -~\n\r\t]/g, '').slice(0, CONFIG.MAX_CONTENT_LENGTH);
+
       Logger.info(`Generating flashcards from ${sourceType}`, {
         contentLength: content.length,
         sourceType
@@ -213,11 +215,12 @@ class GroqAIService {
 
       const systemPrompt = this.createSystemPrompt();
       const response = await this.makeAPIRequest(content, sourceType, systemPrompt);
-      
+
       return this.processAIResponse(response, sourceType);
     } catch (error) {
       Logger.error('AI service error', {
         error: error.message,
+        response: error.response?.data,
         sourceType,
         contentLength: content.length
       });
@@ -278,20 +281,19 @@ Guidelines:
 
   processAIResponse(response, sourceType) {
     const aiResponse = response.data.choices[0].message.content.trim();
-    Logger.debug('AI response preview', { 
+    Logger.debug('AI response preview', {
       preview: aiResponse.substring(0, 200),
-      sourceType 
+      sourceType
     });
 
-    let flashcards;
     try {
-      flashcards = this.parseJSONResponse(aiResponse);
+      return this.validateAndNormalizeFlashcards(this.parseJSONResponse(aiResponse));
     } catch (parseError) {
-      Logger.warn('JSON parsing failed, using fallback', { 
+      Logger.warn('Invalid JSON from Groq, fallback triggered', {
         error: parseError.message,
-        sourceType 
+        raw: aiResponse.substring(0, 300)
       });
-      flashcards = this.extractFlashcardsFromText(aiResponse, sourceType);
+      return this.validateAndNormalizeFlashcards(this.extractFlashcardsFromText(aiResponse, sourceType));
     }
 
     const validatedFlashcards = this.validateAndNormalizeFlashcards(flashcards);
@@ -530,10 +532,11 @@ const createSuccessResponse = (flashcards, source, metadata = {}) => ({
   }
 });
 
-const createErrorResponse = (error, message, details = null) => ({
+const createErrorResponse = (error, message, details = null, debugInfo = {}) => ({
   error,
   message,
   ...(details && { details }),
+  ...(NODE_ENV !== 'production' && debugInfo && { debugInfo }),
   timestamp: new Date().toISOString()
 });
 
@@ -571,8 +574,8 @@ app.get('/', (req, res) => {
 // Generate flashcards from text
 app.post('/generate-flashcards', async (req, res) => {
   try {
-    const { content } = req.body;
-    
+    let { content } = req.body;
+
     if (!content || content.trim().length === 0) {
       return res.status(400).json(createErrorResponse(
         'Content is required',
@@ -588,21 +591,25 @@ app.post('/generate-flashcards', async (req, res) => {
       ));
     }
 
-    const flashcards = await groqAI.generateFlashcards(content, 'text'); // CORRECTED
-    
+    const flashcards = await groqAI.generateFlashcards(content, 'text');
+
     res.json(createSuccessResponse(flashcards, 'text', {
       contentLength: content.length
     }));
-    
+
   } catch (error) {
     Logger.error('Text flashcard generation failed', { error: error.message });
     res.status(500).json(createErrorResponse(
       'Failed to generate flashcards from text',
       error.message,
-      'Please try again with shorter or simpler content'
+      'Please try again with shorter or simpler content',
+      { fullStack: error.stack }
     ));
   }
 });
+
+// DEBUG: Print API Key status
+Logger.info('GROQ API Key status', { loaded: !!process.env.GROQ_API_KEY });
 
 // Generate flashcards from PDF
 app.post('/generate-flashcards/pdf', async (req, res) => {
