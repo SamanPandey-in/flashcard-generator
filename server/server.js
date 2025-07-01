@@ -713,6 +713,8 @@ class AudioTranscriptionService {
       // TODO: Integrate with actual speech-to-text service
       // For Groq AI, you might want to use Whisper API or another transcription service
       // Groq doesn't provide audio transcription directly
+
+      
       
       const placeholderText = `This is a placeholder transcription for "${originalName}". 
       To implement actual audio transcription, consider integrating:
@@ -791,7 +793,8 @@ app.get('/', (req, res) => {
       'Multiple difficulty levels',
       'Rate limiting and security',
       'Enhanced error handling',
-      'Automatic file cleanup'
+      'Automatic file cleanup',
+      'Web search for related links'
     ],
     limits: {
       maxFileSize: `${CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB`,
