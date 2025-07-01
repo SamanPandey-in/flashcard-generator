@@ -41,6 +41,8 @@ const CONFIG = {
   MAX_CONTENT_LENGTH: 50000,
   MAX_FLASHCARDS: 25,
   AI_TIMEOUT: 30000,
+  WHISPER_TIMEOUT: 60000, // 60 seconds for audio transcription
+  WEB_SEARCH_TIMEOUT: 5000, // 5 seconds for web search
   ALLOWED_AUDIO_TYPES: [
     'audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 
     'audio/m4a', 'audio/webm', 'audio/ogg', 'audio/x-wav', 'audio/x-mpeg'
