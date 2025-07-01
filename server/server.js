@@ -395,6 +395,70 @@ class GroqAIService {
     }
   }
 
+    // NEW: Method to add web links to flashcards
+  async addWebLinksToFlashcards(flashcards) {
+    try {
+      Logger.info('Adding web links to flashcards', { count: flashcards.length });
+
+      const flashcardsWithLinks = [];
+
+      for (const card of flashcards) {
+        try {
+          // Extract key terms from the question for search
+          const searchQuery = this.extractSearchTerms(card.question);
+          
+          // Search for related links
+          const relatedLinks = await this.webSearch.searchForTopic(searchQuery, 2);
+          
+          // Format and add links to the answer
+          const linksSection = this.webSearch.formatLinksForAnswer(relatedLinks);
+          
+          flashcardsWithLinks.push({
+            ...card,
+            answer: card.answer + linksSection,
+            relatedLinks: relatedLinks // Also store links separately for potential frontend use
+          });
+
+          // Add small delay to avoid overwhelming search APIs
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+        } catch (error) {
+          Logger.warn('Failed to add links to flashcard', { 
+            cardId: card.id, 
+            error: error.message 
+          });
+          
+          // Return card without links if search fails
+          flashcardsWithLinks.push(card);
+        }
+      }
+
+      Logger.info('Successfully added web links', { 
+        processed: flashcardsWithLinks.length,
+        withLinks: flashcardsWithLinks.filter(card => card.relatedLinks?.length > 0).length
+      });
+
+      return flashcardsWithLinks;
+    } catch (error) {
+      Logger.error('Failed to add web links to flashcards', { error: error.message });
+      return flashcards; // Return original flashcards if web search fails
+    }
+  }
+
+  // NEW: Extract search terms from flashcard question
+  extractSearchTerms(question) {
+    // Remove common question words and extract key terms
+    const stopWords = ['what', 'who', 'when', 'where', 'why', 'how', 'is', 'are', 'was', 'were', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'about', 'define', 'explain', 'describe'];
+    
+    const words = question.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !stopWords.includes(word));
+    
+    // Take the most important terms (first 3-4 words)
+    return words.slice(0, 4).join(' ');
+  }
+
   createSystemPrompt() {
     return `You are an expert educational flashcard generator. Create high-quality flashcards from the provided content.
 
