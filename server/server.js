@@ -698,41 +698,46 @@ class PDFProcessor {
   }
 }
 
-// Audio transcription service (placeholder with improved structure)
+// Audio transcription service with Whisper API integration
 class AudioTranscriptionService {
+  constructor() {
+    this.whisperApiUrl = 'https://api.openai.com/v1/audio/transcriptions';
+    this.apiKey = process.env.OPENAI_API_KEY;
+    
+    if (!this.apiKey) {
+      Logger.warn('OPENAI_API_KEY not found - audio transcription will use fallback');
+    }
+  }
+
   static async transcribe(filePath, originalName) {
+    const service = new AudioTranscriptionService();
+    return await service.transcribeFile(filePath, originalName);
+  }
+
+  async transcribeFile(filePath, originalName) {
     try {
-      Logger.info('Processing audio file', { file: originalName });
+      Logger.info('Processing audio file for transcription', { file: originalName });
       
       const stats = await fs.stat(filePath);
+      const fileSizeMB = stats.size / 1024 / 1024;
+      
       Logger.info('Audio file stats', {
         file: originalName,
-        size: `${(stats.size / 1024 / 1024).toFixed(2)} MB`
+        size: `${fileSizeMB.toFixed(2)} MB`
       });
 
-      // TODO: Integrate with actual speech-to-text service
-      // For Groq AI, you might want to use Whisper API or another transcription service
-      // Groq doesn't provide audio transcription directly
+      // Check file size limit (25MB for Whisper API)
+      if (stats.size > 25 * 1024 * 1024) {
+        throw new Error('Audio file too large. Maximum size is 25MB for transcription.');
+      }
 
-      
-      
-      const placeholderText = `This is a placeholder transcription for "${originalName}". 
-      To implement actual audio transcription, consider integrating:
-      - OpenAI Whisper API
-      - Google Cloud Speech-to-Text
-      - Assembly AI
-      - Or another speech transcription service
+      // Use Whisper API if available, otherwise fallback
+      if (this.apiKey) {
+        return await this.transcribeWithWhisper(filePath, originalName, stats);
+      } else {
+        return await this.transcribeWithFallback(filePath, originalName, stats);
+      }
 
-File processed: ${originalName} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`;
-
-      return {
-        text: placeholderText,
-        metadata: {
-          originalFile: originalName,
-          fileSize: stats.size,
-          isPlaceholder: true
-        }
-      };
     } catch (error) {
       Logger.error('Audio transcription failed', {
         file: originalName,
@@ -740,6 +745,157 @@ File processed: ${originalName} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`;
       });
       throw new Error(`Failed to transcribe audio: ${error.message}`);
     }
+  }
+
+  async transcribeWithWhisper(filePath, originalName, stats) {
+    try {
+      Logger.info('Using Whisper API for transcription', { file: originalName });
+
+      // Create form data for Whisper API
+      const formData = new FormData();
+      formData.append('file', fsSync.createReadStream(filePath), {
+        filename: originalName,
+        contentType: this.getContentType(originalName)
+      });
+      formData.append('model', 'whisper-1');
+      formData.append('response_format', 'json');
+      formData.append('temperature', '0.2'); // Lower temperature for more consistent results
+      
+      // Optional: Add language hint if you want to improve accuracy
+      // formData.append('language', 'en'); // Uncomment and set language code if needed
+
+      // Make request to Whisper API
+      const response = await axios.post(this.whisperApiUrl, formData, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          ...formData.getHeaders()
+        },
+        timeout: 60000, // 60 seconds timeout for audio processing
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+
+      const transcriptionText = response.data.text;
+
+      if (!transcriptionText || transcriptionText.trim().length === 0) {
+        throw new Error('No speech detected in the audio file. Please ensure the audio contains clear speech.');
+      }
+
+      if (transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH) {
+        Logger.warn('Transcription too long, truncating', {
+          originalLength: transcriptionText.length,
+          maxLength: CONFIG.MAX_CONTENT_LENGTH
+        });
+      }
+
+      const finalText = transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH 
+        ? transcriptionText.substring(0, CONFIG.MAX_CONTENT_LENGTH) + '...[truncated]'
+        : transcriptionText;
+
+      Logger.info('Whisper transcription successful', {
+        file: originalName,
+        textLength: finalText.length,
+        originalLength: transcriptionText.length
+      });
+
+      return {
+        text: finalText,
+        metadata: {
+          originalFile: originalName,
+          fileSize: stats.size,
+          transcriptionEngine: 'OpenAI Whisper',
+          textLength: finalText.length,
+          wastruncated: transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH,
+          confidence: 'high', // Whisper generally has high confidence
+          processingTime: new Date().toISOString()
+        }
+      };
+
+    } catch (error) {
+      Logger.error('Whisper API transcription failed', {
+        file: originalName,
+        error: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText
+      });
+
+      // Handle specific Whisper API errors
+      if (error.response?.status === 400) {
+        throw new Error('Invalid audio file format. Please use WAV, MP3, M4A, OGG, or WebM files.');
+      }
+      if (error.response?.status === 401) {
+        throw new Error('Invalid OpenAI API key. Please check your configuration.');
+      }
+      if (error.response?.status === 429) {
+        throw new Error('OpenAI API rate limit exceeded. Please try again later.');
+      }
+      if (error.response?.status === 413) {
+        throw new Error('Audio file too large. Maximum size is 25MB.');
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Transcription timeout. Please try with a shorter audio file.');
+      }
+
+      // Fallback to placeholder if Whisper fails
+      Logger.warn('Falling back to placeholder transcription', { file: originalName });
+      return await this.transcribeWithFallback(filePath, originalName, stats);
+    }
+  }
+
+  async transcribeWithFallback(filePath, originalName, stats) {
+    Logger.info('Using fallback transcription method', { file: originalName });
+
+    const placeholderText = `Audio transcription placeholder for "${originalName}".
+
+To enable actual speech-to-text transcription, please:
+1. Set up an OpenAI API key in your environment variables (OPENAI_API_KEY)
+2. Ensure your audio file contains clear speech
+3. Supported formats: WAV, MP3, M4A, OGG, WebM
+
+File information:
+- Name: ${originalName}
+- Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB
+- Processed: ${new Date().toISOString()}
+
+For now, you can manually transcribe the audio content and paste it into the text input field to generate flashcards.`;
+
+    return {
+      text: placeholderText,
+      metadata: {
+        originalFile: originalName,
+        fileSize: stats.size,
+        transcriptionEngine: 'Placeholder',
+        isPlaceholder: true,
+        textLength: placeholderText.length,
+        processingTime: new Date().toISOString()
+      }
+    };
+  }
+
+  getContentType(filename) {
+    const extension = path.extname(filename).toLowerCase();
+    const contentTypes = {
+      '.wav': 'audio/wav',
+      '.mp3': 'audio/mpeg',
+      '.m4a': 'audio/m4a',
+      '.ogg': 'audio/ogg',
+      '.webm': 'audio/webm'
+    };
+    return contentTypes[extension] || 'audio/mpeg';
+  }
+
+  // Utility method to check if Whisper is available
+  static isWhisperAvailable() {
+    return !!process.env.OPENAI_API_KEY;
+  }
+
+  // Utility method to get supported audio formats
+  static getSupportedFormats() {
+    return {
+      formats: ['WAV', 'MP3', 'M4A', 'OGG', 'WebM'],
+      maxSize: '25MB',
+      engine: process.env.OPENAI_API_KEY ? 'OpenAI Whisper' : 'Placeholder'
+    };
   }
 }
 
