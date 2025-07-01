@@ -934,27 +934,41 @@ const createErrorResponse = (error, message, details = null, debugInfo = {}) => 
 
 // Routes
 app.get('/', (req, res) => {
+  const whisperStatus = AudioTranscriptionService.isWhisperAvailable();
+  const supportedFormats = AudioTranscriptionService.getSupportedFormats();
+  
   res.json({
     message: '🚀 Flashcard Generator API v2.0',
     status: 'healthy',
     timestamp: new Date().toISOString(),
     environment: NODE_ENV,
-    aiProvider: 'Groq AI', // CORRECTED: Updated provider name
+    aiProvider: 'Groq AI',
     endpoints: {
       'POST /generate-flashcards': 'Generate flashcards from text',
       'POST /generate-flashcards/pdf': 'Generate flashcards from PDF file',
       'POST /generate-flashcards/voice': 'Generate flashcards from audio recording'
     },
     features: [
-      'AI-powered flashcard generation (Groq AI)', // CORRECTED
+      'AI-powered flashcard generation (Groq AI)',
       'PDF text extraction with validation',
-      'Audio transcription (placeholder)',
+      `Audio transcription (${whisperStatus ? 'OpenAI Whisper' : 'Placeholder'})`,
       'Multiple difficulty levels',
       'Rate limiting and security',
       'Enhanced error handling',
       'Automatic file cleanup',
       'Web search for related links'
     ],
+    services: {
+      groqAI: !!process.env.GROQ_API_KEY,
+      whisperAPI: whisperStatus,
+      webSearch: true
+    },
+    audioTranscription: {
+      enabled: whisperStatus,
+      engine: supportedFormats.engine,
+      supportedFormats: supportedFormats.formats,
+      maxFileSize: supportedFormats.maxSize
+    },
     limits: {
       maxFileSize: `${CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB`,
       maxContentLength: CONFIG.MAX_CONTENT_LENGTH,
