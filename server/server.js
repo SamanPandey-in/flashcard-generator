@@ -378,7 +378,12 @@ class GroqAIService {
       const systemPrompt = this.createSystemPrompt();
       const response = await this.makeAPIRequest(content, sourceType, systemPrompt);
 
-      return this.processAIResponse(response, sourceType);
+      const flashcards = await this.processAIResponse(response, sourceType);
+      
+      // NEW: Add web links to flashcards
+      const flashcardsWithLinks = await this.addWebLinksToFlashcards(flashcards);
+      
+      return flashcardsWithLinks;
     } catch (error) {
       Logger.error('AI service error', {
         error: error.message,
