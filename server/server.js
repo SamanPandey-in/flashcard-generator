@@ -206,6 +206,153 @@ const createMulterConfig = async () => {
   });
 };
 
+// NEW: Web Search Service for finding related links
+class WebSearchService {
+  constructor() {
+    this.searchEngines = [
+      {
+        name: 'DuckDuckGo',
+        url: 'https://api.duckduckgo.com/',
+        enabled: true
+      },
+      {
+        name: 'SerpAPI',
+        url: 'https://serpapi.com/search',
+        enabled: !!process.env.SERPAPI_KEY
+      }
+    ];
+  }
+
+  async searchForTopic(query, maxResults = 3) {
+    try {
+      Logger.debug('Searching for topic', { query, maxResults });
+
+      // Try DuckDuckGo first (free API)
+      const results = await this.searchDuckDuckGo(query, maxResults);
+      
+      if (results.length > 0) {
+        return results;
+      }
+
+      // Fallback to SerpAPI if available
+      if (process.env.SERPAPI_KEY) {
+        return await this.searchSerpAPI(query, maxResults);
+      }
+
+      // If no API available, return educational domain links
+      return this.generateEducationalLinks(query);
+
+    } catch (error) {
+      Logger.warn('Web search failed', { query, error: error.message });
+      return this.generateEducationalLinks(query);
+    }
+  }
+
+  async searchDuckDuckGo(query, maxResults) {
+    try {
+      const response = await axios.get('https://api.duckduckgo.com/', {
+        params: {
+          q: query,
+          format: 'json',
+          no_html: '1',
+          skip_disambig: '1'
+        },
+        timeout: CONFIG.WEB_SEARCH_TIMEOUT
+      });
+
+      const results = [];
+      
+      // Extract results from DuckDuckGo response
+      if (response.data.RelatedTopics) {
+        for (const topic of response.data.RelatedTopics.slice(0, maxResults)) {
+          if (topic.FirstURL && topic.Text) {
+            results.push({
+              title: topic.Text.split(' - ')[0] || 'Related Information',
+              url: topic.FirstURL,
+              description: topic.Text.substring(0, 150) + '...'
+            });
+          }
+        }
+      }
+
+      // If no related topics, try abstract
+      if (results.length === 0 && response.data.AbstractURL) {
+        results.push({
+          title: response.data.AbstractSource || 'Learn More',
+          url: response.data.AbstractURL,
+          description: response.data.Abstract || 'Additional information about this topic'
+        });
+      }
+
+      return results;
+    } catch (error) {
+      Logger.debug('DuckDuckGo search failed', { error: error.message });
+      return [];
+    }
+  }
+
+  async searchSerpAPI(query, maxResults) {
+    try {
+      const response = await axios.get('https://serpapi.com/search', {
+        params: {
+          q: query,
+          api_key: process.env.SERPAPI_KEY,
+          engine: 'google',
+          num: maxResults
+        },
+        timeout: CONFIG.WEB_SEARCH_TIMEOUT
+      });
+
+      const results = [];
+      
+      if (response.data.organic_results) {
+        for (const result of response.data.organic_results.slice(0, maxResults)) {
+          results.push({
+            title: result.title,
+            url: result.link,
+            description: result.snippet || 'Learn more about this topic'
+          });
+        }
+      }
+
+      return results;
+    } catch (error) {
+      Logger.debug('SerpAPI search failed', { error: error.message });
+      return [];
+    }
+  }
+
+  generateEducationalLinks(query) {
+    // Generate educational links based on query keywords
+    const educationalSites = [
+      { domain: 'wikipedia.org', name: 'Wikipedia' },
+      { domain: 'khanacademy.org', name: 'Khan Academy' },
+      { domain: 'coursera.org', name: 'Coursera' },
+      { domain: 'edx.org', name: 'edX' },
+      { domain: 'britannica.com', name: 'Britannica' }
+    ];
+
+    const sanitizedQuery = encodeURIComponent(query.replace(/[^\w\s]/g, ''));
+    
+    return educationalSites.slice(0, 3).map(site => ({
+      title: `${query} - ${site.name}`,
+      url: `https://${site.domain}/search?q=${sanitizedQuery}`,
+      description: `Learn more about ${query} on ${site.name}`
+    }));
+  }
+
+  formatLinksForAnswer(links) {
+    if (!links || links.length === 0) {
+      return '';
+    }
+
+    const linkSection = '\n\n📚 **Related Links:**\n' + 
+      links.map(link => `• [${link.title}](${link.url})`).join('\n');
+    
+    return linkSection;
+  }
+}
+
 // Enhanced Groq AI service class (CORRECTED FOR GROQ AI) Modified
 class GroqAIService {
   constructor() {
