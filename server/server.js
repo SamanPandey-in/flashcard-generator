@@ -1243,17 +1243,27 @@ const startServer = async () => {
     await FileManager.ensureUploadsDir();
     await startCleanupTask();
     
+    // Validate API keys
+    const groqStatus = process.env.GROQ_API_KEY ? '✅ Connected' : '❌ Missing';
+    const whisperStatus = process.env.OPENAI_API_KEY ? '✅ Connected' : '⚠️  Missing (using fallback)';
+    
     app.listen(PORT, () => {
       Logger.info('🚀 Flashcard Generator API v2.0 Started Successfully!');
       Logger.info('Server configuration', {
         port: PORT,
         environment: NODE_ENV,
-        apiKey: process.env.GROQ_API_KEY ? '✅ Connected' : '❌ Missing', // CORRECTED
+        groqAPI: groqStatus,
+        whisperAPI: whisperStatus,
         corsOrigins: CONFIG.CORS_ORIGINS,
         maxFileSize: `${CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB`,
         maxContentLength: CONFIG.MAX_CONTENT_LENGTH,
         maxFlashcards: CONFIG.MAX_FLASHCARDS
       });
+      
+      if (!process.env.OPENAI_API_KEY) {
+        Logger.warn('⚠️  OpenAI API key not found. Audio transcription will use placeholder text.');
+        Logger.warn('   To enable Whisper transcription, set OPENAI_API_KEY environment variable.');
+      }
     });
   } catch (error) {
     Logger.error('Failed to start server', { error: error.message });
