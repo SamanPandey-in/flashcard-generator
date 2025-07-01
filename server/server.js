@@ -360,6 +360,7 @@ class GroqAIService {
   constructor() {
     this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     this.apiKey = process.env.GROQ_API_KEY;
+    this.webSearch = new WebSearchService(); // Initialize web search
 
     if (!this.apiKey) {
       Logger.error('GROQ_API_KEY environment variable is required');
@@ -1071,6 +1072,7 @@ app.post('/generate-flashcards/pdf', async (req, res) => {
 });
 
 // Generate flashcards from voice recording
+// Updated route for voice flashcard generation with better error handling
 app.post('/generate-flashcards/voice', async (req, res) => {
   let filePath = null;
   
@@ -1092,37 +1094,53 @@ app.post('/generate-flashcards/voice', async (req, res) => {
         if (!req.file) {
           return res.status(400).json(createErrorResponse(
             'Audio file is required',
-            'Please upload an audio file'
+            'Please upload an audio file (WAV, MP3, M4A, OGG, WebM)'
           ));
         }
 
         filePath = req.file.path;
+        
+        Logger.info('Starting audio transcription', {
+          file: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype
+        });
         
         const { text, metadata: audioMetadata } = await AudioTranscriptionService.transcribe(
           filePath, 
           req.file.originalname
         );
         
-        const flashcards = await groqAI.generateFlashcards(text, 'voice recording'); // CORRECTED
+        Logger.info('Audio transcription completed', {
+          file: req.file.originalname,
+          textLength: text.length,
+          isPlaceholder: audioMetadata.isPlaceholder
+        });
+        
+        const flashcards = await groqAI.generateFlashcards(text, 'voice recording');
 
         res.json(createSuccessResponse(flashcards, 'voice', {
           originalFile: req.file.originalname,
           fileSize: req.file.size,
+          transcriptionEngine: audioMetadata.transcriptionEngine,
           transcriptionLength: text.length,
-          transcriptionPreview: text.substring(0, 200) + '...',
+          transcriptionPreview: text.substring(0, 200) + (text.length > 200 ? '...' : ''),
           ...audioMetadata
         }));
 
       } catch (error) {
         Logger.error('Voice processing error', { 
           file: req.file?.originalname,
-          error: error.message 
+          error: error.message,
+          stack: error.stack
         });
         
         res.status(500).json(createErrorResponse(
           'Failed to generate flashcards from voice recording',
           error.message,
-          'Please try recording again with clear audio'
+          AudioTranscriptionService.isWhisperAvailable() 
+            ? 'Please try recording again with clear audio'
+            : 'OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.'
         ));
       } finally {
         await FileManager.deleteFile(filePath);
