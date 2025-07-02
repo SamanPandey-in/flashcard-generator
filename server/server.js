@@ -514,31 +514,37 @@ Guidelines:
   }
 
   processAIResponse(response, sourceType) {
-    const aiResponse = response.data.choices[0].message.content.trim();
-    Logger.debug('AI response preview', {
-      preview: aiResponse.substring(0, 200),
-      sourceType
-    });
+  const aiResponse = response.data.choices[0].message.content.trim();
+  Logger.debug('AI response preview', {
+    preview: aiResponse.substring(0, 200),
+    sourceType
+  });
 
-    try {
-      return this.validateAndNormalizeFlashcards(this.parseJSONResponse(aiResponse));
-    } catch (parseError) {
-      Logger.warn('Invalid JSON from Groq, fallback triggered', {
-        error: parseError.message,
-        raw: aiResponse.substring(0, 300)
-      });
-      return this.validateAndNormalizeFlashcards(this.extractFlashcardsFromText(aiResponse, sourceType));
-    }
-
-    const validatedFlashcards = this.validateAndNormalizeFlashcards(flashcards);
+  try {
+    const flashcards = this.validateAndNormalizeFlashcards(this.parseJSONResponse(aiResponse));
     
     Logger.info(`Generated flashcards successfully`, {
-      count: validatedFlashcards.length,
+      count: flashcards.length,
       sourceType
     });
 
-    return validatedFlashcards;
+    return flashcards;
+  } catch (parseError) {
+    Logger.warn('Invalid JSON from Groq, fallback triggered', {
+      error: parseError.message,
+      raw: aiResponse.substring(0, 300)
+    });
+    
+    const fallbackFlashcards = this.validateAndNormalizeFlashcards(this.extractFlashcardsFromText(aiResponse, sourceType));
+    
+    Logger.info(`Generated flashcards via fallback`, {
+      count: fallbackFlashcards.length,
+      sourceType
+    });
+
+    return fallbackFlashcards;
   }
+}
 
   parseJSONResponse(response) {
     // Remove markdown formatting
@@ -1473,7 +1479,7 @@ const startServer = async () => {
     
     // Validate API keys
     const groqStatus = process.env.GROQ_API_KEY ? '✅ Connected' : '❌ Missing';
-    const whisperStatus = process.env.OPENAI_API_KEY ? '✅ Connected' : '⚠️  Missing (using fallback)';
+    const whisperStatus = AudioTranscriptionService.isTranscriptionAvailable() ? '✅ Connected' : '⚠️  Missing (using fallback)'; // Fixed method name
     
     app.listen(PORT, () => {
       Logger.info('🚀 Flashcard Generator API v2.0 Started Successfully!');
@@ -1488,9 +1494,9 @@ const startServer = async () => {
         maxFlashcards: CONFIG.MAX_FLASHCARDS
       });
       
-      if (!process.env.OPENAI_API_KEY) {
-        Logger.warn('⚠️  OpenAI API key not found. Audio transcription will use placeholder text.');
-        Logger.warn('   To enable Whisper transcription, set OPENAI_API_KEY environment variable.');
+      if (!AudioTranscriptionService.isTranscriptionAvailable()) { // Fixed method name
+        Logger.warn('⚠️  Audio transcription API keys not found. Audio transcription will use placeholder text.');
+        Logger.warn('   To enable Whisper transcription, set GROQ_API_KEY or OPENAI_API_KEY environment variable.');
       }
     });
   } catch (error) {
