@@ -1310,7 +1310,7 @@ app.post('/generate-flashcards/voice', async (req, res) => {
 
         filePath = req.file.path;
         
-        Logger.info('Starting audio transcription', {
+        Logger.info('Starting enhanced audio transcription', {
           file: req.file.originalname,
           size: req.file.size,
           mimetype: req.file.mimetype
@@ -1324,19 +1324,32 @@ app.post('/generate-flashcards/voice', async (req, res) => {
         Logger.info('Audio transcription completed', {
           file: req.file.originalname,
           textLength: text.length,
-          isPlaceholder: audioMetadata.isPlaceholder
+          isPlaceholder: audioMetadata.isPlaceholder,
+          engine: audioMetadata.transcriptionEngine
         });
         
+        // Generate flashcards even from placeholder text (it contains instructions)
         const flashcards = await groqAI.generateFlashcards(text, 'voice recording');
 
-        res.json(createSuccessResponse(flashcards, 'voice', {
+        // Enhanced response with transcription status
+        const response = createSuccessResponse(flashcards, 'voice', {
           originalFile: req.file.originalname,
           fileSize: req.file.size,
           transcriptionEngine: audioMetadata.transcriptionEngine,
           transcriptionLength: text.length,
           transcriptionPreview: text.substring(0, 200) + (text.length > 200 ? '...' : ''),
+          isPlaceholder: audioMetadata.isPlaceholder,
           ...audioMetadata
-        }));
+        });
+
+        // Add helpful message for placeholder responses
+        if (audioMetadata.isPlaceholder) {
+          response.message = 'Audio transcription unavailable due to API rate limits. Please follow the manual transcription instructions in the generated flashcard.';
+          response.instructions = audioMetadata.instructions;
+          response.retryAdvice = audioMetadata.retryAdvice;
+        }
+
+        res.json(response);
 
       } catch (error) {
         Logger.error('Voice processing error', { 
@@ -1345,12 +1358,25 @@ app.post('/generate-flashcards/voice', async (req, res) => {
           stack: error.stack
         });
         
+        // Provide specific guidance based on error type
+        let helpMessage = 'Please try recording again with clear audio';
+        
+        if (error.message.includes('rate limit')) {
+          helpMessage = 'API rate limit exceeded. Please wait 5-10 minutes and try again, or manually transcribe the audio content.';
+        } else if (error.message.includes('Invalid API key')) {
+          helpMessage = 'API configuration issue. Please contact support or try manual transcription.';
+        } else if (error.message.includes('timeout')) {
+          helpMessage = 'Audio file took too long to process. Try with a shorter recording or manual transcription.';
+        }
+        
         res.status(500).json(createErrorResponse(
           'Failed to generate flashcards from voice recording',
           error.message,
-          AudioTranscriptionService.isWhisperAvailable() 
-            ? 'Please try recording again with clear audio'
-            : 'OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.'
+          helpMessage,
+          {
+            transcriptionStatus: AudioTranscriptionService.getTranscriptionStatus(),
+            supportedFormats: AudioTranscriptionService.getSupportedFormats()
+          }
         ));
       } finally {
         await FileManager.deleteFile(filePath);
