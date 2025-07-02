@@ -1130,7 +1130,7 @@ const createErrorResponse = (error, message, details = null, debugInfo = {}) => 
 
 // Routes
 app.get('/', (req, res) => {
-  const whisperStatus = AudioTranscriptionService.isWhisperAvailable();
+  const whisperStatus = AudioTranscriptionService.isTranscriptionAvailable();
   const supportedFormats = AudioTranscriptionService.getSupportedFormats();
   
   res.json({
@@ -1147,7 +1147,7 @@ app.get('/', (req, res) => {
     features: [
       'AI-powered flashcard generation (Groq AI)',
       'PDF text extraction with validation',
-      `Audio transcription (${whisperStatus ? 'OpenAI Whisper' : 'Placeholder'})`,
+      `Audio transcription (${whisperStatus ? 'Available' : 'Placeholder'})`,
       'Multi-service audio transcription with fallbacks',
       'Enhanced rate limiting protection',
       'Intelligent error recovery',
