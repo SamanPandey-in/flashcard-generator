@@ -704,11 +704,21 @@ class PDFProcessor {
 // Audio transcription service with Whisper API integration
 class AudioTranscriptionService {
   constructor() {
-    this.whisperApiUrl = 'https://api.openai.com/v1/audio/transcriptions';
-    this.apiKey = process.env.OPENAI_API_KEY;
+    this.whisperApiUrl = 'https://api.groq.com/openai/v1/audio/transcriptions'; // Using Groq's Whisper endpoint
+    this.openaiApiUrl = 'https://api.openai.com/v1/audio/transcriptions'; // Original OpenAI endpoint
+    this.groqApiKey = process.env.GROQ_API_KEY;
+    this.openaiApiKey = process.env.OPENAI_API_KEY;
     
-    if (!this.apiKey) {
-      Logger.warn('OPENAI_API_KEY not found - audio transcription will use fallback');
+    // Rate limiting state
+    this.lastOpenAIRequest = 0;
+    this.lastGroqRequest = 0;
+    this.openaiRequestCount = 0;
+    this.groqRequestCount = 0;
+    this.rateLimitWindow = 60000; // 1 minute window
+    this.maxRequestsPerMinute = 50; // Conservative limit
+    
+    if (!this.groqApiKey && !this.openaiApiKey) {
+      Logger.warn('No API keys found for audio transcription - will use fallback');
     }
   }
 
@@ -729,32 +739,126 @@ class AudioTranscriptionService {
         size: `${fileSizeMB.toFixed(2)} MB`
       });
 
-      // Check file size limit (25MB for Whisper API)
+      // Check file size limit
       if (stats.size > 25 * 1024 * 1024) {
         throw new Error('Audio file too large. Maximum size is 25MB for transcription.');
       }
 
-      // Use Whisper API if available, otherwise fallback
-      if (this.apiKey) {
-        return await this.transcribeWithWhisper(filePath, originalName, stats);
-      } else {
-        return await this.transcribeWithFallback(filePath, originalName, stats);
-      }
+      // Try transcription services in order of preference
+      const transcriptionResult = await this.tryTranscriptionServices(filePath, originalName, stats);
+      
+      return transcriptionResult;
 
     } catch (error) {
       Logger.error('Audio transcription failed', {
         file: originalName,
         error: error.message
       });
-      throw new Error(`Failed to transcribe audio: ${error.message}`);
+      
+      // Return enhanced fallback with instructions
+      return await this.createEnhancedFallback(filePath, originalName, stats, error);
     }
   }
 
-  async transcribeWithWhisper(filePath, originalName, stats) {
-    try {
-      Logger.info('Using Whisper API for transcription', { file: originalName });
+  async tryTranscriptionServices(filePath, originalName, stats) {
+    const services = [
+      { name: 'Groq Whisper', method: 'transcribeWithGroq' },
+      { name: 'OpenAI Whisper', method: 'transcribeWithOpenAI' },
+      { name: 'Local Processing', method: 'transcribeWithLocalFallback' }
+    ];
 
-      // Create form data for Whisper API
+    let lastError = null;
+
+    for (const service of services) {
+      try {
+        Logger.info(`Attempting transcription with ${service.name}`, { file: originalName });
+        
+        const result = await this[service.method](filePath, originalName, stats);
+        
+        Logger.info(`Transcription successful with ${service.name}`, {
+          file: originalName,
+          textLength: result.text.length
+        });
+        
+        return result;
+        
+      } catch (error) {
+        Logger.warn(`${service.name} transcription failed`, {
+          file: originalName,
+          error: error.message
+        });
+        
+        lastError = error;
+        
+        // If rate limited, wait and try next service
+        if (error.message.includes('rate limit') || error.message.includes('429')) {
+          Logger.info(`Rate limited on ${service.name}, trying next service`);
+          continue;
+        }
+        
+        // If API key invalid, skip to next
+        if (error.message.includes('401') || error.message.includes('Invalid API key')) {
+          continue;
+        }
+        
+        // For other errors, still try next service
+        continue;
+      }
+    }
+
+    // If all services failed, throw the last error
+    throw lastError || new Error('All transcription services failed');
+  }
+
+  async transcribeWithGroq(filePath, originalName, stats) {
+    if (!this.groqApiKey) {
+      throw new Error('Groq API key not available');
+    }
+
+    // Check rate limiting for Groq
+    await this.checkRateLimit('groq');
+
+    try {
+      Logger.info('Using Groq Whisper API for transcription', { file: originalName });
+
+      const formData = new FormData();
+      formData.append('file', fsSync.createReadStream(filePath), {
+        filename: originalName,
+        contentType: this.getContentType(originalName)
+      });
+      formData.append('model', 'whisper-large-v3'); // Groq's Whisper model
+      formData.append('response_format', 'json');
+      formData.append('temperature', '0.2');
+
+      const response = await axios.post(this.whisperApiUrl, formData, {
+        headers: {
+          'Authorization': `Bearer ${this.groqApiKey}`,
+          ...formData.getHeaders()
+        },
+        timeout: 60000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+
+      return this.processTranscriptionResponse(response.data.text, originalName, stats, 'Groq Whisper');
+
+    } catch (error) {
+      this.handleTranscriptionError(error, 'Groq Whisper', originalName);
+      throw error;
+    }
+  }
+
+  async transcribeWithOpenAI(filePath, originalName, stats) {
+    if (!this.openaiApiKey) {
+      throw new Error('OpenAI API key not available');
+    }
+
+    // Check rate limiting for OpenAI
+    await this.checkRateLimit('openai');
+
+    try {
+      Logger.info('Using OpenAI Whisper API for transcription', { file: originalName });
+
       const formData = new FormData();
       formData.append('file', fsSync.createReadStream(filePath), {
         filename: originalName,
@@ -762,115 +866,195 @@ class AudioTranscriptionService {
       });
       formData.append('model', 'whisper-1');
       formData.append('response_format', 'json');
-      formData.append('temperature', '0.2'); // Lower temperature for more consistent results
-      
-      // Optional: Add language hint if you want to improve accuracy
-      // formData.append('language', 'en'); // Uncomment and set language code if needed
+      formData.append('temperature', '0.2');
 
-      // Make request to Whisper API
-      const response = await axios.post(this.whisperApiUrl, formData, {
+      const response = await axios.post(this.openaiApiUrl, formData, {
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${this.openaiApiKey}`,
           ...formData.getHeaders()
         },
-        timeout: 60000, // 60 seconds timeout for audio processing
+        timeout: 60000,
         maxContentLength: Infinity,
         maxBodyLength: Infinity
       });
 
-      const transcriptionText = response.data.text;
-
-      if (!transcriptionText || transcriptionText.trim().length === 0) {
-        throw new Error('No speech detected in the audio file. Please ensure the audio contains clear speech.');
-      }
-
-      if (transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH) {
-        Logger.warn('Transcription too long, truncating', {
-          originalLength: transcriptionText.length,
-          maxLength: CONFIG.MAX_CONTENT_LENGTH
-        });
-      }
-
-      const finalText = transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH 
-        ? transcriptionText.substring(0, CONFIG.MAX_CONTENT_LENGTH) + '...[truncated]'
-        : transcriptionText;
-
-      Logger.info('Whisper transcription successful', {
-        file: originalName,
-        textLength: finalText.length,
-        originalLength: transcriptionText.length
-      });
-
-      return {
-        text: finalText,
-        metadata: {
-          originalFile: originalName,
-          fileSize: stats.size,
-          transcriptionEngine: 'OpenAI Whisper',
-          textLength: finalText.length,
-          wastruncated: transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH,
-          confidence: 'high', // Whisper generally has high confidence
-          processingTime: new Date().toISOString()
-        }
-      };
+      return this.processTranscriptionResponse(response.data.text, originalName, stats, 'OpenAI Whisper');
 
     } catch (error) {
-      Logger.error('Whisper API transcription failed', {
-        file: originalName,
-        error: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText
-      });
-
-      // Handle specific Whisper API errors
-      if (error.response?.status === 400) {
-        throw new Error('Invalid audio file format. Please use WAV, MP3, M4A, OGG, or WebM files.');
-      }
-      if (error.response?.status === 401) {
-        throw new Error('Invalid OpenAI API key. Please check your configuration.');
-      }
-      if (error.response?.status === 429) {
-        throw new Error('OpenAI API rate limit exceeded. Please try again later.');
-      }
-      if (error.response?.status === 413) {
-        throw new Error('Audio file too large. Maximum size is 25MB.');
-      }
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('Transcription timeout. Please try with a shorter audio file.');
-      }
-
-      // Fallback to placeholder if Whisper fails
-      Logger.warn('Falling back to placeholder transcription', { file: originalName });
-      return await this.transcribeWithFallback(filePath, originalName, stats);
+      this.handleTranscriptionError(error, 'OpenAI Whisper', originalName);
+      throw error;
     }
   }
 
-  async transcribeWithFallback(filePath, originalName, stats) {
-    Logger.info('Using fallback transcription method', { file: originalName });
-
-    const placeholderText = `Audio transcription placeholder for "${originalName}".
-
-To enable actual speech-to-text transcription, please:
-1. Set up an OpenAI API key in your environment variables (OPENAI_API_KEY)
-2. Ensure your audio file contains clear speech
-3. Supported formats: WAV, MP3, M4A, OGG, WebM
-
-File information:
-- Name: ${originalName}
-- Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB
-- Processed: ${new Date().toISOString()}
-
-For now, you can manually transcribe the audio content and paste it into the text input field to generate flashcards.`;
-
+  async transcribeWithLocalFallback(filePath, originalName, stats) {
+    Logger.info('Using local fallback transcription', { file: originalName });
+    
+    // This could be enhanced with local speech recognition libraries
+    // For now, return a more helpful placeholder
+    const placeholderText = this.generateIntelligentPlaceholder(originalName, stats);
+    
     return {
       text: placeholderText,
       metadata: {
         originalFile: originalName,
         fileSize: stats.size,
-        transcriptionEngine: 'Placeholder',
+        transcriptionEngine: 'Local Fallback',
         isPlaceholder: true,
         textLength: placeholderText.length,
+        processingTime: new Date().toISOString(),
+        instructions: 'Manual transcription required - copy audio content to text input'
+      }
+    };
+  }
+
+  async checkRateLimit(service) {
+    const now = Date.now();
+    
+    if (service === 'openai') {
+      // Reset counter if window has passed
+      if (now - this.lastOpenAIRequest > this.rateLimitWindow) {
+        this.openaiRequestCount = 0;
+      }
+      
+      if (this.openaiRequestCount >= this.maxRequestsPerMinute) {
+        const waitTime = this.rateLimitWindow - (now - this.lastOpenAIRequest);
+        Logger.warn(`OpenAI rate limit reached, waiting ${waitTime}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+      
+      this.openaiRequestCount++;
+      this.lastOpenAIRequest = now;
+      
+    } else if (service === 'groq') {
+      // Reset counter if window has passed
+      if (now - this.lastGroqRequest > this.rateLimitWindow) {
+        this.groqRequestCount = 0;
+      }
+      
+      if (this.groqRequestCount >= this.maxRequestsPerMinute) {
+        const waitTime = this.rateLimitWindow - (now - this.lastGroqRequest);
+        Logger.warn(`Groq rate limit reached, waiting ${waitTime}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+      
+      this.groqRequestCount++;
+      this.lastGroqRequest = now;
+    }
+  }
+
+  processTranscriptionResponse(transcriptionText, originalName, stats, engine) {
+    if (!transcriptionText || transcriptionText.trim().length === 0) {
+      throw new Error('No speech detected in the audio file. Please ensure the audio contains clear speech.');
+    }
+
+    if (transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH) {
+      Logger.warn('Transcription too long, truncating', {
+        originalLength: transcriptionText.length,
+        maxLength: CONFIG.MAX_CONTENT_LENGTH
+      });
+    }
+
+    const finalText = transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH 
+      ? transcriptionText.substring(0, CONFIG.MAX_CONTENT_LENGTH) + '...[truncated]'
+      : transcriptionText;
+
+    return {
+      text: finalText,
+      metadata: {
+        originalFile: originalName,
+        fileSize: stats.size,
+        transcriptionEngine: engine,
+        textLength: finalText.length,
+        wasTruncated: transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH,
+        confidence: 'high',
         processingTime: new Date().toISOString()
+      }
+    };
+  }
+
+  handleTranscriptionError(error, engine, originalName) {
+    Logger.error(`${engine} transcription failed`, {
+      file: originalName,
+      error: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText
+    });
+
+    // Handle specific API errors
+    if (error.response?.status === 400) {
+      throw new Error('Invalid audio file format. Please use WAV, MP3, M4A, OGG, or WebM files.');
+    }
+    if (error.response?.status === 401) {
+      throw new Error(`Invalid ${engine} API key. Please check your configuration.`);
+    }
+    if (error.response?.status === 429) {
+      throw new Error(`${engine} API rate limit exceeded. Trying alternative service...`);
+    }
+    if (error.response?.status === 413) {
+      throw new Error('Audio file too large. Maximum size is 25MB.');
+    }
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Transcription timeout. Please try with a shorter audio file.');
+    }
+  }
+
+  generateIntelligentPlaceholder(originalName, stats) {
+    const duration = this.estimateAudioDuration(stats.size);
+    
+    return `🎵 Audio Transcription Required
+
+📁 File: ${originalName}
+📏 Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB
+⏱️ Est. Duration: ~${duration} minutes
+
+🚨 TRANSCRIPTION UNAVAILABLE
+Current API services are rate-limited or unavailable.
+
+📝 MANUAL STEPS:
+1. Play your audio file: "${originalName}"
+2. Listen and transcribe the speech content
+3. Copy the transcribed text
+4. Paste it into the main text input field
+5. Click "Generate Flashcards" to create your study cards
+
+💡 TIPS FOR BETTER RESULTS:
+• Include key terms, definitions, and concepts
+• Organize content into clear topics
+• Add examples and explanations where helpful
+
+⚙️ TECHNICAL INFO:
+• Processed: ${new Date().toLocaleString()}
+• Status: Fallback mode (API rate limited)
+• Next attempt: Try again in 5-10 minutes
+
+🔧 TO ENABLE AUTO-TRANSCRIPTION:
+1. Ensure GROQ_API_KEY or OPENAI_API_KEY is configured
+2. Wait for rate limits to reset
+3. Upload smaller audio files if possible`;
+  }
+
+  estimateAudioDuration(fileSizeBytes) {
+    // Rough estimate: MP3 at 128kbps ≈ 1MB per minute
+    const estimatedMinutes = Math.ceil(fileSizeBytes / (1024 * 1024));
+    return estimatedMinutes;
+  }
+
+  async createEnhancedFallback(filePath, originalName, stats, originalError) {
+    const placeholderText = this.generateIntelligentPlaceholder(originalName, stats);
+    
+    return {
+      text: placeholderText,
+      metadata: {
+        originalFile: originalName,
+        fileSize: stats.size,
+        transcriptionEngine: 'Enhanced Fallback',
+        isPlaceholder: true,
+        textLength: placeholderText.length,
+        processingTime: new Date().toISOString(),
+        error: originalError.message,
+        instructions: 'Manual transcription required due to API limitations',
+        estimatedDuration: this.estimateAudioDuration(stats.size),
+        retryAdvice: 'Wait 5-10 minutes for rate limits to reset, then try again'
       }
     };
   }
@@ -887,17 +1071,29 @@ For now, you can manually transcribe the audio content and paste it into the tex
     return contentTypes[extension] || 'audio/mpeg';
   }
 
-  // Utility method to check if Whisper is available
-  static isWhisperAvailable() {
-    return !!process.env.OPENAI_API_KEY;
+  // Enhanced utility methods
+  static isTranscriptionAvailable() {
+    return !!(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY);
   }
 
-  // Utility method to get supported audio formats
+  static getTranscriptionStatus() {
+    const groqStatus = process.env.GROQ_API_KEY ? '✅ Available' : '❌ Missing';
+    const openaiStatus = process.env.OPENAI_API_KEY ? '✅ Available' : '❌ Missing';
+    
+    return {
+      groq: groqStatus,
+      openai: openaiStatus,
+      fallback: '✅ Always available',
+      recommended: 'Set GROQ_API_KEY for best results'
+    };
+  }
+
   static getSupportedFormats() {
     return {
       formats: ['WAV', 'MP3', 'M4A', 'OGG', 'WebM'],
       maxSize: '25MB',
-      engine: process.env.OPENAI_API_KEY ? 'OpenAI Whisper' : 'Placeholder'
+      engines: ['Groq Whisper', 'OpenAI Whisper', 'Local Fallback'],
+      status: AudioTranscriptionService.getTranscriptionStatus()
     };
   }
 }
