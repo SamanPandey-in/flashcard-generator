@@ -331,17 +331,17 @@ const MobileFlashcardGenerator = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-blue-500 shadow-sm border-b">
         <div className="px-4 py-3">
-          <h1 className="text-xl font-bold text-gray-900">Flashcard Generator</h1>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">Create flashcards from text, PDF, or voice</p>
+          <h1 className="text-xl font-bold text-white text-center">Flashcard Generator</h1>
+          <div className="relative flex items-center justify-between">
+            <p className="absolute left-1/2 transform -translate-x-1/2 text-sm text-gray-200 text-center">Create flashcards from text, PDF, or voice</p>
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${
                 connectionStatus === 'connected' ? 'bg-green-500' : 
                 connectionStatus === 'failed' ? 'bg-red-500' : 'bg-yellow-500'
               }`}></div>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-200">
                 {connectionStatus === 'connected' ? 'Connected' : 
                  connectionStatus === 'failed' ? 'Disconnected' : 'Connecting...'}
               </span>
