@@ -212,26 +212,29 @@ const MobileFlashcardGenerator = () => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
 
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          setAudioChunks(prev => [...prev, event.data]);
-        }
+      const localChunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) localChunks.push(e.data);
       };
 
       recorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        const audioFile = new File([audioBlob], 'voice-recording.wav', { type: 'audio/wav' });
-        processContent(null, 'voice', audioFile);
-        
-        // Clean up
+        clearInterval(recordingTimerRef.current);
+        const blob = new Blob(localChunks, { type: 'audio/wav' });
+        const file = new File([blob], 'voice-recording.wav', { type: 'audio/wav' });
+
+        if (file.size < 1000) {
+          showError("Recording too short or empty. Please try again.");
+        } else {
+          processContent(null, 'voice', file);
+        }
+
         stream.getTracks().forEach(track => track.stop());
         setAudioChunks([]);
       };
 
       recorder.start();
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      showError(`Could not access microphone: ${error.message}. Please check permissions.`);
+    } catch (err) {
+      showError(`Could not access mic: ${err.message}`);
       setIsRecording(false);
     }
   };
@@ -241,7 +244,6 @@ const MobileFlashcardGenerator = () => {
       mediaRecorder.stop();
       setIsRecording(false);
       setRecordingTime(0);
-      clearInterval(recordingTimerRef.current);
     }
   };
 
