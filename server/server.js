@@ -1148,6 +1148,10 @@ app.get('/', (req, res) => {
       'AI-powered flashcard generation (Groq AI)',
       'PDF text extraction with validation',
       `Audio transcription (${whisperStatus ? 'OpenAI Whisper' : 'Placeholder'})`,
+      'Multi-service audio transcription with fallbacks',
+      'Enhanced rate limiting protection',
+      'Intelligent error recovery',
+      'Manual transcription guidance',
       'Multiple difficulty levels',
       'Rate limiting and security',
       'Enhanced error handling',
@@ -1163,7 +1167,9 @@ app.get('/', (req, res) => {
       enabled: whisperStatus,
       engine: supportedFormats.engine,
       supportedFormats: supportedFormats.formats,
-      maxFileSize: supportedFormats.maxSize
+      maxFileSize: supportedFormats.maxSize,
+      rateLimiting: 'Enabled with automatic fallbacks',
+      manualFallback: 'Enhanced guidance provided'
     },
     limits: {
       maxFileSize: `${CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB`,
