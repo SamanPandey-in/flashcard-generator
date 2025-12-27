@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, GraduationCap } from 'lucide-react';
 import Header from './components/Header';
 import TabNavigation from './components/TabNavigation';
 import InputSection from './components/InputSection';
 import FlashcardDeck from './components/FlashcardDeck';
+import SkeletonLoader from './components/SkeletonLoader';
+import StudySidebar from './components/StudyBuddy/StudySidebar';
 
 const MobileFlashcardGenerator = () => {
   const [activeTab, setActiveTab] = useState('text');
@@ -17,13 +19,24 @@ const MobileFlashcardGenerator = () => {
   const [audioChunks, setAudioChunks] = useState([]);
   const [error, setError] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('unknown');
+  const [triggerWiggle, setTriggerWiggle] = useState(false);
+
+  // Study Buddy State
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [savedContent, setSavedContent] = useState(''); // Store original content for context
+
+  // Lifted Settings State
+  const [settings, setSettings] = useState({
+    tone: 'Professional',
+    quantity: '10',
+    level: 'University'
+  });
 
   const fileInputRef = useRef(null);
   const recordingTimerRef = useRef(null);
 
   const API_URL = process.env.REACT_APP_API_URL || 'https://flashcard-generator-tvst.onrender.com';
 
-  // Test API connection on component mount
   useEffect(() => {
     testConnection();
   }, []);
@@ -56,7 +69,13 @@ const MobileFlashcardGenerator = () => {
   const processContent = async (content, type, file = null) => {
     setIsGenerating(true);
     setError(null);
+    setFlashcards([]);
     console.log("Processing content:", { type, contentLength: content?.length, fileName: file?.name });
+
+    // Save content for Study Buddy context
+    if (content) {
+      setSavedContent(content);
+    }
 
     try {
       let response;
@@ -70,7 +89,12 @@ const MobileFlashcardGenerator = () => {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ content })
+          body: JSON.stringify({
+            content,
+            tone: settings.tone,
+            quantity: settings.quantity,
+            level: settings.level
+          })
         });
       } else if (type === 'pdf' || type === 'voice') {
         const formData = new FormData();
@@ -120,7 +144,6 @@ const MobileFlashcardGenerator = () => {
       }
 
       setFlashcards(prev => [...prev, ...validFlashcards]);
-      // Scroll to flashcards (optional but good UX)
       setTimeout(() => {
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
       }, 500);
@@ -146,6 +169,8 @@ const MobileFlashcardGenerator = () => {
   const handleTextSubmit = () => {
     if (!textInput.trim()) {
       showError("Please enter some text content first.");
+      setTriggerWiggle(true);
+      setTimeout(() => setTriggerWiggle(false), 500);
       return;
     }
     if (textInput.length > 50000) {
@@ -162,6 +187,8 @@ const MobileFlashcardGenerator = () => {
 
     if (file.type !== 'application/pdf') {
       showError("Please select a PDF file only.");
+      setTriggerWiggle(true);
+      setTimeout(() => setTriggerWiggle(false), 500);
       return;
     }
 
@@ -223,7 +250,6 @@ const MobileFlashcardGenerator = () => {
     }
   };
 
-  // Card Management Functions
   const nextCard = () => {
     if (currentCard < flashcards.length - 1) setCurrentCard(currentCard + 1);
   };
@@ -247,12 +273,6 @@ const MobileFlashcardGenerator = () => {
   };
 
   const startEdit = (card) => {
-    // Current simple implementation: just prompt for now or separate logic
-    // Or we can implement a modal.
-    // Given the new structure, implementing a full edit modal is better UX but 'prompt' is quick.
-    // Let's use window.prompt for simplicity in this refactor unless we built a modal.
-    // Original used inline state. New structure: pass edit capability to Deck?
-    // Let's implement a simple inline update for now using prompts to avoid complex modal state lifting.
     const newQuestion = window.prompt("Edit Question:", card.question);
     if (newQuestion === null) return;
     const newAnswer = window.prompt("Edit Answer:", card.answer);
@@ -275,7 +295,6 @@ const MobileFlashcardGenerator = () => {
 
   return (
     <div className="min-h-screen relative overflow-x-hidden selection:bg-blue-500/30">
-      {/* Background Gradients */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-500/5 blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-500/5 blur-[120px]"></div>
@@ -283,11 +302,23 @@ const MobileFlashcardGenerator = () => {
 
       <Header connectionStatus={connectionStatus} />
 
+      {/* Study Buddy Toggle Button */}
+      {(flashcards.length > 0 || savedContent) && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed right-6 bottom-6 z-40 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white p-4 rounded-full shadow-2xl transition-all transform hover:scale-110 flex items-center gap-2 group"
+        >
+          <GraduationCap className="w-6 h-6" />
+          <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap text-sm font-medium">
+            AI Study Buddy
+          </span>
+        </button>
+      )}
+
       <main className="relative z-10 pt-24 px-4 pb-12 max-w-4xl mx-auto">
 
-        {/* Error Banner */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/50 p-4 mb-6 rounded-xl backdrop-blur-sm animate-fade-in flex items-start">
+          <div className="bg-red-500/10 border border-red-500/50 p-4 mb-6 rounded-xl backdrop-blur-sm animate-fade-in flex items-start animate-wiggle">
             <AlertCircle className="w-5 h-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-red-200">{error}</p>
           </div>
@@ -308,9 +339,14 @@ const MobileFlashcardGenerator = () => {
           recordingTime={recordingTime}
           isGenerating={isGenerating}
           connectionStatus={connectionStatus}
+          triggerWiggle={triggerWiggle}
+          settings={settings}
+          setSettings={setSettings}
         />
 
-        {flashcards.length > 0 && (
+        {isGenerating && <SkeletonLoader />}
+
+        {!isGenerating && flashcards.length > 0 && (
           <div className="mt-12 border-t border-white/5 pt-12 animate-fade-in">
             <div className="flex items-center justify-center mb-8">
               <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-200 to-white">
@@ -335,6 +371,14 @@ const MobileFlashcardGenerator = () => {
           </div>
         )}
       </main>
+
+      {/* Study Buddy Sidebar */}
+      <StudySidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        flashcards={flashcards}
+        rawContent={savedContent}
+      />
     </div>
   );
 };
