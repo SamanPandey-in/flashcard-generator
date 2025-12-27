@@ -1,5 +1,15 @@
+<<<<<<< Updated upstream
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, Mic, Play, RotateCcw, Shuffle, Download, Trash2, Edit3, Check, X, Menu, ChevronLeft, ChevronRight, Square, AlertCircle } from 'lucide-react';
+=======
+import React, { useState, useRef, useEffect } from 'react';
+import { AlertCircle } from 'lucide-react';
+import Header from './components/Header';
+import TabNavigation from './components/TabNavigation';
+import InputSection from './components/InputSection';
+import FlashcardDeck from './components/FlashcardDeck';
+import SkeletonLoader from './components/SkeletonLoader';
+>>>>>>> Stashed changes
 
 const MobileFlashcardGenerator = () => {
   const [activeTab, setActiveTab] = useState('text');
@@ -18,13 +28,29 @@ const MobileFlashcardGenerator = () => {
   const [audioChunks, setAudioChunks] = useState([]);
   const [error, setError] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('unknown');
+<<<<<<< Updated upstream
+=======
+  const [triggerWiggle, setTriggerWiggle] = useState(false);
+
+  // Lifted Settings State
+  const [settings, setSettings] = useState({
+    tone: 'Professional',
+    quantity: '10',
+    level: 'University'
+  });
+
+>>>>>>> Stashed changes
   const fileInputRef = useRef(null);
   const recordingTimerRef = useRef(null);
 
   const API_URL = process.env.REACT_APP_API_URL || 'https://flashcard-generator-tvst.onrender.com';
 
+<<<<<<< Updated upstream
   // Test API connection on component mount
   React.useEffect(() => {
+=======
+  useEffect(() => {
+>>>>>>> Stashed changes
     testConnection();
   }, []);
 
@@ -58,7 +84,14 @@ const MobileFlashcardGenerator = () => {
   const processContent = async (content, type, file = null) => {
     setIsGenerating(true);
     setError(null);
+    setFlashcards([]);
     console.log("Processing content:", { type, contentLength: content?.length, fileName: file?.name });
+
+    // Only clear text input if it was a text submission
+    if (type === 'text') {
+      // Optional: clear text input here if desired, or keep it. 
+      // Current logic in handleTextSubmit clears it.
+    }
 
     try {
       let response;
@@ -74,7 +107,13 @@ const MobileFlashcardGenerator = () => {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ content })
+          // Pass settings along with content
+          body: JSON.stringify({
+            content,
+            tone: settings.tone,
+            quantity: settings.quantity,
+            level: settings.level
+          })
         });
       } else if (type === 'pdf' || type === 'voice') {
         const formData = new FormData();
@@ -139,8 +178,14 @@ const MobileFlashcardGenerator = () => {
       }
 
       setFlashcards(prev => [...prev, ...validFlashcards]);
+<<<<<<< Updated upstream
       
       console.log(`Successfully generated ${validFlashcards.length} flashcards`);
+=======
+      setTimeout(() => {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      }, 500);
+>>>>>>> Stashed changes
 
     } catch (error) {
       console.error('Error generating flashcards:', error);
@@ -165,6 +210,8 @@ const MobileFlashcardGenerator = () => {
   const handleTextSubmit = () => {
     if (!textInput.trim()) {
       showError("Please enter some text content first.");
+      setTriggerWiggle(true);
+      setTimeout(() => setTriggerWiggle(false), 500);
       return;
     }
     
@@ -185,6 +232,8 @@ const MobileFlashcardGenerator = () => {
     
     if (file.type !== 'application/pdf') {
       showError("Please select a PDF file only.");
+      setTriggerWiggle(true);
+      setTimeout(() => setTriggerWiggle(false), 500);
       return;
     }
     
@@ -247,12 +296,15 @@ const MobileFlashcardGenerator = () => {
     }
   };
 
+<<<<<<< Updated upstream
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+=======
+>>>>>>> Stashed changes
   const nextCard = () => {
     if (currentCard < flashcards.length - 1) {
       setCurrentCard(currentCard + 1);
@@ -286,11 +338,18 @@ const MobileFlashcardGenerator = () => {
   };
 
   const startEdit = (card) => {
+<<<<<<< Updated upstream
     setEditingCard(card.id);
     setEditQuestion(card.question);
     setEditAnswer(card.answer);
     setShowMenu(false);
   };
+=======
+    const newQuestion = window.prompt("Edit Question:", card.question);
+    if (newQuestion === null) return;
+    const newAnswer = window.prompt("Edit Answer:", card.answer);
+    if (newAnswer === null) return;
+>>>>>>> Stashed changes
 
   const saveEdit = () => {
     setFlashcards(prev => prev.map(card => 
@@ -329,6 +388,7 @@ const MobileFlashcardGenerator = () => {
   };
 
   return (
+<<<<<<< Updated upstream
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50">
       {/* Header */}
       <div className="bg-blue-500 shadow-sm border-b">
@@ -344,6 +404,55 @@ const MobileFlashcardGenerator = () => {
               <span className="text-xs text-gray-200">
                 {connectionStatus === 'connected' ? 'Connected' : 
                  connectionStatus === 'failed' ? 'Disconnected' : 'Connecting...'}
+=======
+    <div className="min-h-screen relative overflow-x-hidden selection:bg-blue-500/30">
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-500/5 blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-500/5 blur-[120px]"></div>
+      </div>
+
+      <Header connectionStatus={connectionStatus} />
+
+      <main className="relative z-10 pt-24 px-4 pb-12 max-w-4xl mx-auto">
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/50 p-4 mb-6 rounded-xl backdrop-blur-sm animate-fade-in flex items-start animate-wiggle">
+            <AlertCircle className="w-5 h-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-200">{error}</p>
+          </div>
+        )}
+
+        <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+
+        <InputSection
+          activeTab={activeTab}
+          textInput={textInput}
+          setTextInput={setTextInput}
+          handleTextSubmit={handleTextSubmit}
+          fileInputRef={fileInputRef}
+          handleFileUpload={handleFileUpload}
+          isRecording={isRecording}
+          startRecording={startRecording}
+          stopRecording={stopRecording}
+          recordingTime={recordingTime}
+          isGenerating={isGenerating}
+          connectionStatus={connectionStatus}
+          triggerWiggle={triggerWiggle}
+          settings={settings}
+          setSettings={setSettings}
+        />
+
+        {isGenerating && <SkeletonLoader />}
+
+        {!isGenerating && flashcards.length > 0 && (
+          <div className="mt-12 border-t border-white/5 pt-12 animate-fade-in">
+            <div className="flex items-center justify-center mb-8">
+              <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-200 to-white">
+                Your Flashcards
+              </h2>
+              <span className="ml-3 px-2 py-0.5 rounded-full bg-white/10 text-xs text-gray-400 border border-white/5">
+                {flashcards.length}
+>>>>>>> Stashed changes
               </span>
             </div>
           </div>
