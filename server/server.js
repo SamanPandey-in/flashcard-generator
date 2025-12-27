@@ -399,6 +399,94 @@ class GroqAIService {
 
   // Removed addWebLinksToFlashcards functionality
 
+  async generateChatResponse(message, context) {
+    try {
+      const systemPrompt = `You are a helpful AI Study Buddy.
+      Use the provided Study Context to answer the student's question.
+      If the answer isn't in the context, say so, but try to help based on general knowledge if possible, while noting it's outside the provided materials.
+      Keep answers concise, encouraging, and easy to understand.`;
+
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Study Context:\n${context.slice(0, 15000)}\n\nStudent Question: ${message}` }
+      ];
+
+      return await this.makeSimpleAPIRequest(messages, 1000);
+    } catch (error) {
+      Logger.error('Chat generation failed', { error: error.message });
+      throw new Error("I'm having trouble thinking right now. Try again!");
+    }
+  }
+
+  async generateSummary(content) {
+    try {
+      const systemPrompt = `You are an expert summarizer. Create a "Cheat Sheet" summary of the provided content.
+      - Use markdown bullet points.
+      - Group into sections with headers.
+      - Highlight key terms in bold.
+      - Keep it under 500 words.`;
+
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Content to summarize:\n${content.slice(0, 20000)}` }
+      ];
+
+      return await this.makeSimpleAPIRequest(messages, 1500);
+    } catch (error) {
+      Logger.error('Summary generation failed', { error: error.message });
+      throw new Error("Could not generate summary.");
+    }
+  }
+
+  async generateQuiz(content) {
+    try {
+      const systemPrompt = `You are a strict Quiz Generator. 
+      Generate a JSON array of 10 Multiple Choice Questions (MCQ) based on the content.
+      Format:
+      [
+        {
+          "id": 1,
+          "question": "Question text?",
+          "options": ["Option A", "Option B", "Option C", "Option D"],
+          "correctAnswer": "Option A",
+          "explanation": "Why this is correct."
+        }
+      ]
+      - Return ONLY valid JSON.
+      - Ensure 4 distinct options.`;
+
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Generate quiz from:\n${content.slice(0, 15000)}` }
+      ];
+
+      const response = await this.makeSimpleAPIRequest(messages, 2500);
+      return this.parseJSONResponse(response);
+    } catch (error) {
+      Logger.error('Quiz generation failed', { error: error.message });
+      throw new Error("Could not generate quiz.");
+    }
+  }
+
+  async makeSimpleAPIRequest(messages, maxTokens) {
+    const requestData = {
+      messages,
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
+      max_tokens: maxTokens
+    };
+
+    const response = await axios.post(this.apiUrl, requestData, {
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: CONFIG.AI_TIMEOUT
+    });
+
+    return response.data.choices[0].message.content.trim();
+  }
+
   createSystemPrompt(config) {
     // Default values if not provided
     const tone = config.tone || 'Professional';
@@ -1297,6 +1385,50 @@ app.post('/generate-flashcards/voice', async (req, res) => {
       'Voice processing failed',
       error.message
     ));
+  }
+});
+
+// ============ AI Study Buddy Endpoints ============
+
+// Study Buddy - Chat
+app.post('/study/chat', async (req, res) => {
+  try {
+    const { message, context } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message is required' });
+
+    const response = await groqAI.generateChatResponse(message, context || '');
+    res.json({ response });
+  } catch (error) {
+    Logger.error('Chat failed', { error: error.message });
+    res.status(500).json({ error: 'Chat failed', details: error.message });
+  }
+});
+
+// Study Buddy - Summary
+app.post('/study/summary', async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Content is required' });
+
+    const summary = await groqAI.generateSummary(content);
+    res.json({ summary });
+  } catch (error) {
+    Logger.error('Summary failed', { error: error.message });
+    res.status(500).json({ error: 'Summary generation failed', details: error.message });
+  }
+});
+
+// Study Buddy - Quiz
+app.post('/study/quiz', async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Content is required' });
+
+    const quiz = await groqAI.generateQuiz(content);
+    res.json({ quiz });
+  } catch (error) {
+    Logger.error('Quiz failed', { error: error.message });
+    res.status(500).json({ error: 'Quiz generation failed', details: error.message });
   }
 });
 
