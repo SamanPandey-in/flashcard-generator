@@ -21,18 +21,18 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 class Logger {
   static log(level, message, data = null) {
     const timestamp = new Date().toISOString();
-    const logEntry = data 
+    const logEntry = data
       ? `[${timestamp}] ${level.toUpperCase()}: ${message} ${JSON.stringify(data, null, 2)}`
       : `[${timestamp}] ${level.toUpperCase()}: ${message}`;
-    
+
     console.log(logEntry);
   }
 
   static info(message, data) { this.log('info', message, data); }
   static error(message, data) { this.log('error', message, data); }
   static warn(message, data) { this.log('warn', message, data); }
-  static debug(message, data) { 
-    if (NODE_ENV === 'development') this.log('debug', message, data); 
+  static debug(message, data) {
+    if (NODE_ENV === 'development') this.log('debug', message, data);
   }
 }
 
@@ -45,7 +45,7 @@ const CONFIG = {
   WHISPER_TIMEOUT: 60000, // 60 seconds for audio transcription
   WEB_SEARCH_TIMEOUT: 5000, // 5 seconds for web search
   ALLOWED_AUDIO_TYPES: [
-    'audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 
+    'audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/mp4',
     'audio/m4a', 'audio/webm', 'audio/ogg', 'audio/x-wav', 'audio/x-mpeg'
   ],
   ALLOWED_PDF_TYPES: ['application/pdf'],
@@ -66,17 +66,17 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
-    
+
     // Check if origin is in allowed list
     if (CONFIG.CORS_ORIGINS.includes(origin)) {
       return callback(null, true);
     }
-    
+
     // For development, also allow localhost
     if (origin && origin.includes('localhost')) {
       return callback(null, true);
     }
-    
+
     console.log('CORS blocked origin:', origin);
     console.log('Allowed origins:', CONFIG.CORS_ORIGINS);
     return callback(new Error('Not allowed by CORS'));
@@ -142,7 +142,7 @@ class FileManager {
       for (const file of files) {
         const filePath = path.join(directory, file);
         const stats = await fs.stat(filePath);
-        
+
         if (now - stats.mtime.getTime() > maxAge) {
           await fs.unlink(filePath);
           Logger.debug('Cleaned up old file', { file });
@@ -168,7 +168,7 @@ class FileManager {
 // Enhanced multer configuration
 const createMulterConfig = async () => {
   const uploadsDir = await FileManager.ensureUploadsDir();
-  
+
   const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsDir),
     filename: (req, file, cb) => {
@@ -232,7 +232,7 @@ class WebSearchService {
 
       // Try DuckDuckGo first (free API)
       const results = await this.searchDuckDuckGo(query, maxResults);
-      
+
       if (results.length > 0) {
         return results;
       }
@@ -264,7 +264,7 @@ class WebSearchService {
       });
 
       const results = [];
-      
+
       // Extract results from DuckDuckGo response
       if (response.data.RelatedTopics) {
         for (const topic of response.data.RelatedTopics.slice(0, maxResults)) {
@@ -307,7 +307,7 @@ class WebSearchService {
       });
 
       const results = [];
-      
+
       if (response.data.organic_results) {
         for (const result of response.data.organic_results.slice(0, maxResults)) {
           results.push({
@@ -336,7 +336,7 @@ class WebSearchService {
     ];
 
     const sanitizedQuery = encodeURIComponent(query.replace(/[^\w\s]/g, ''));
-    
+
     return educationalSites.slice(0, 3).map(site => ({
       title: `${query} - ${site.name}`,
       url: `https://${site.domain}/search?q=${sanitizedQuery}`,
@@ -349,9 +349,9 @@ class WebSearchService {
       return '';
     }
 
-    const linkSection = '\n\n📚 **Related Links:**\n' + 
+    const linkSection = '\n\n📚 **Related Links:**\n' +
       links.map(link => `• [${link.title}](${link.url})`).join('\n');
-    
+
     return linkSection;
   }
 }
@@ -369,25 +369,23 @@ class GroqAIService {
     }
   }
 
-  async generateFlashcards(content, sourceType = 'text') {
+  async generateFlashcards(content, config = {}, sourceType = 'text') {
     try {
       // Sanitize content
       content = content.replace(/[^ -~\n\r\t]/g, '').slice(0, CONFIG.MAX_CONTENT_LENGTH);
 
       Logger.info(`Generating flashcards from ${sourceType}`, {
         contentLength: content.length,
-        sourceType
+        sourceType,
+        config: config
       });
 
-      const systemPrompt = this.createSystemPrompt();
+      const systemPrompt = this.createSystemPrompt(config);
       const response = await this.makeAPIRequest(content, sourceType, systemPrompt);
 
       const flashcards = await this.processAIResponse(response, sourceType);
-      
-      // NEW: Add web links to flashcards
-      const flashcardsWithLinks = await this.addWebLinksToFlashcards(flashcards);
-      
-      return flashcardsWithLinks;
+
+      return flashcards; // No web links added
     } catch (error) {
       Logger.error('AI service error', {
         error: error.message,
@@ -399,93 +397,42 @@ class GroqAIService {
     }
   }
 
-    // NEW: Method to add web links to flashcards
-  async addWebLinksToFlashcards(flashcards) {
-    try {
-      Logger.info('Adding web links to flashcards', { count: flashcards.length });
+  // Removed addWebLinksToFlashcards functionality
 
-      const flashcardsWithLinks = [];
+  createSystemPrompt(config) {
+    // Default values if not provided
+    const tone = config.tone || 'Professional';
+    const quantity = parseInt(config.quantity) || 10;
+    const level = config.level || 'University';
 
-      for (const card of flashcards) {
-        try {
-          // Extract key terms from the question for search
-          const searchQuery = this.extractSearchTerms(card.question);
-          
-          // Search for related links
-          const relatedLinks = await this.webSearch.searchForTopic(searchQuery, 2);
-          
-          // Format and add links to the answer
-          const linksSection = this.webSearch.formatLinksForAnswer(relatedLinks);
-          
-          flashcardsWithLinks.push({
-            ...card,
-            answer: card.answer + linksSection,
-            relatedLinks: relatedLinks // Also store links separately for potential frontend use
-          });
-
-          // Add small delay to avoid overwhelming search APIs
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-        } catch (error) {
-          Logger.warn('Failed to add links to flashcard', { 
-            cardId: card.id, 
-            error: error.message 
-          });
-          
-          // Return card without links if search fails
-          flashcardsWithLinks.push(card);
-        }
-      }
-
-      Logger.info('Successfully added web links', { 
-        processed: flashcardsWithLinks.length,
-        withLinks: flashcardsWithLinks.filter(card => card.relatedLinks?.length > 0).length
-      });
-
-      return flashcardsWithLinks;
-    } catch (error) {
-      Logger.error('Failed to add web links to flashcards', { error: error.message });
-      return flashcards; // Return original flashcards if web search fails
-    }
-  }
-
-  // NEW: Extract search terms from flashcard question
-  extractSearchTerms(question) {
-    // Remove common question words and extract key terms
-    const stopWords = ['what', 'who', 'when', 'where', 'why', 'how', 'is', 'are', 'was', 'were', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'about', 'define', 'explain', 'describe'];
-    
-    const words = question.toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .split(/\s+/)
-      .filter(word => word.length > 2 && !stopWords.includes(word));
-    
-    // Take the most important terms (first 3-4 words)
-    return words.slice(0, 4).join(' ');
-  }
-
-  createSystemPrompt() {
     return `You are an expert educational flashcard generator. Create high-quality flashcards from the provided content.
+
+USER PREFERENCES:
+- Tone: ${tone}
+- Target Audience Level: ${level}
+- Quantity: ${quantity} flashcards (Exact or close to this number)
 
 CRITICAL REQUIREMENTS:
 - Return ONLY a valid JSON array
 - No additional text, explanations, or markdown formatting
 - Each flashcard must have: id, question, answer, difficulty
+- DO NOT INCLUDE RELATED LINKS OR EXTERNAL URLS
 
 Response format:
 [
   {
     "id": "card-1",
     "question": "Clear, specific question here",
-    "answer": "Concise but complete answer (1-3 sentences)",
+    "answer": "Concise but complete answer (1-3 sentences) matching the requested tone.",
     "difficulty": "Easy|Medium|Hard"
   }
 ]
 
 Guidelines:
-- Generate 8-20 flashcards based on content richness
+- Generate exactly ${quantity} flashcards if possible
 - Focus on key concepts, definitions, facts, and relationships
 - Make questions specific and unambiguous
-- Vary difficulty levels appropriately
+- Vary difficulty levels appropriately based on the '${level}' level
 - Ensure questions test understanding, not just memorization
 - Keep answers informative but concise`;
   }
@@ -494,13 +441,12 @@ Guidelines:
     const requestData = {
       messages: [
         { role: "system", content: systemPrompt },
-        { 
-          role: "user", 
+        {
+          role: "user",
           content: `Generate flashcards from this ${sourceType} content:\n\n${content}`
         }
       ],
-      // CORRECTED: Using Groq AI supported models
-      model: "llama-3.3-70b-versatile", // You can also use: mixtral-8x7b-32768, llama-3.1-70b-versatile
+      model: "llama-3.3-70b-versatile",
       temperature: 0.7,
       max_tokens: 3000
     };
@@ -515,67 +461,67 @@ Guidelines:
   }
 
   processAIResponse(response, sourceType) {
-  const aiResponse = response.data.choices[0].message.content.trim();
-  Logger.debug('AI response preview', {
-    preview: aiResponse.substring(0, 200),
-    sourceType
-  });
-
-  try {
-    const flashcards = this.validateAndNormalizeFlashcards(this.parseJSONResponse(aiResponse));
-    
-    Logger.info(`Generated flashcards successfully`, {
-      count: flashcards.length,
+    const aiResponse = response.data.choices[0].message.content.trim();
+    Logger.debug('AI response preview', {
+      preview: aiResponse.substring(0, 200),
       sourceType
     });
 
-    return flashcards;
-  } catch (parseError) {
-    Logger.warn('Invalid JSON from Groq, fallback triggered', {
-      error: parseError.message,
-      raw: aiResponse.substring(0, 300)
-    });
-    
-    const fallbackFlashcards = this.validateAndNormalizeFlashcards(this.extractFlashcardsFromText(aiResponse, sourceType));
-    
-    Logger.info(`Generated flashcards via fallback`, {
-      count: fallbackFlashcards.length,
-      sourceType
-    });
+    try {
+      const flashcards = this.validateAndNormalizeFlashcards(this.parseJSONResponse(aiResponse));
 
-    return fallbackFlashcards;
+      Logger.info(`Generated flashcards successfully`, {
+        count: flashcards.length,
+        sourceType
+      });
+
+      return flashcards;
+    } catch (parseError) {
+      Logger.warn('Invalid JSON from Groq, fallback triggered', {
+        error: parseError.message,
+        raw: aiResponse.substring(0, 300)
+      });
+
+      const fallbackFlashcards = this.validateAndNormalizeFlashcards(this.extractFlashcardsFromText(aiResponse, sourceType));
+
+      Logger.info(`Generated flashcards via fallback`, {
+        count: fallbackFlashcards.length,
+        sourceType
+      });
+
+      return fallbackFlashcards;
+    }
   }
-}
 
   parseJSONResponse(response) {
     // Remove markdown formatting
     const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-    
+
     // Extract JSON array
     const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
     const jsonStr = jsonMatch ? jsonMatch[0] : cleaned;
-    
+
     const parsed = JSON.parse(jsonStr);
-    
+
     if (!Array.isArray(parsed)) {
       throw new Error('Response is not an array');
     }
-    
+
     return parsed;
   }
 
   extractFlashcardsFromText(text, sourceType) {
     Logger.debug('Using fallback text extraction', { sourceType });
-    
+
     const flashcards = [];
     const lines = text.split('\n').filter(line => line.trim());
-    
+
     let currentCard = {};
     let cardCount = 0;
-    
+
     for (const line of lines) {
       const lowerLine = line.toLowerCase().trim();
-      
+
       if (lowerLine.includes('question') && line.includes(':')) {
         if (currentCard.question && currentCard.answer) {
           flashcards.push(this.createCardObject(currentCard, cardCount++));
@@ -588,17 +534,17 @@ Guidelines:
         currentCard.difficulty = this.extractDifficulty(diffText);
       }
     }
-    
+
     // Add the last card
     if (currentCard.question && currentCard.answer) {
       flashcards.push(this.createCardObject(currentCard, cardCount));
     }
-    
+
     // Fallback if no cards found
     if (flashcards.length === 0) {
       flashcards.push(this.createFallbackCard(text, sourceType));
     }
-    
+
     return flashcards;
   }
 
@@ -623,7 +569,7 @@ Guidelines:
 
   extractDifficulty(text) {
     const difficulties = ['Easy', 'Medium', 'Hard'];
-    return difficulties.find(d => 
+    return difficulties.find(d =>
       text.toLowerCase().includes(d.toLowerCase())
     ) || 'Medium';
   }
@@ -635,8 +581,8 @@ Guidelines:
         id: card.id || `card-${Date.now()}-${index}`,
         question: (card.question || '').toString().trim() || `Question ${index + 1}`,
         answer: (card.answer || '').toString().trim() || `Answer ${index + 1}`,
-        difficulty: ['Easy', 'Medium', 'Hard'].includes(card.difficulty) 
-          ? card.difficulty 
+        difficulty: ['Easy', 'Medium', 'Hard'].includes(card.difficulty)
+          ? card.difficulty
           : 'Medium'
       }))
       .slice(0, CONFIG.MAX_FLASHCARDS);
@@ -646,15 +592,15 @@ Guidelines:
     if (error.code === 'ECONNABORTED') {
       return new Error('Request timeout - please try again with shorter content');
     }
-    
+
     if (error.response?.status === 429) {
       return new Error('Rate limit exceeded - please try again later');
     }
-    
+
     if (error.response?.status === 401) {
       return new Error('Invalid API key - please check configuration');
     }
-    
+
     return new Error(`AI service error: ${error.response?.data?.error?.message || error.message}`);
   }
 }
@@ -664,7 +610,7 @@ class PDFProcessor {
   static async extractText(filePath, originalName) {
     try {
       Logger.info('Processing PDF', { file: originalName });
-      
+
       const dataBuffer = await fs.readFile(filePath);
       const pdfData = await pdf(dataBuffer);
       const extractedText = pdfData.text;
@@ -695,14 +641,14 @@ class PDFProcessor {
         file: originalName,
         error: error.message
       });
-      
+
       if (error.message.includes('Invalid PDF')) {
         throw new Error('Invalid PDF file. Please upload a valid PDF document.');
       }
       if (error.message.includes('encrypted')) {
         throw new Error('PDF is password protected. Please upload an unprotected PDF.');
       }
-      
+
       throw error;
     }
   }
@@ -715,7 +661,7 @@ class AudioTranscriptionService {
     this.openaiApiUrl = 'https://api.openai.com/v1/audio/transcriptions';
     this.groqApiKey = process.env.GROQ_API_KEY;
     this.openaiApiKey = process.env.OPENAI_API_KEY;
-    
+
     // Rate limiting state
     this.lastOpenAIRequest = 0;
     this.lastGroqRequest = 0;
@@ -723,7 +669,7 @@ class AudioTranscriptionService {
     this.groqRequestCount = 0;
     this.rateLimitWindow = 60000;
     this.maxRequestsPerMinute = 50;
-    
+
     if (!this.groqApiKey && !this.openaiApiKey) {
       Logger.warn('No API keys found for audio transcription - will use fallback');
     }
@@ -737,10 +683,10 @@ class AudioTranscriptionService {
   async transcribeFile(filePath, originalName) {
     try {
       Logger.info('Processing audio file for transcription', { file: originalName });
-      
+
       const stats = await fs.stat(filePath);
       const fileSizeMB = stats.size / 1024 / 1024;
-      
+
       Logger.info('Audio file stats', {
         file: originalName,
         size: `${fileSizeMB.toFixed(2)} MB`
@@ -762,7 +708,7 @@ class AudioTranscriptionService {
 
       // Try transcription services in order of preference
       const transcriptionResult = await this.tryTranscriptionServices(filePath, originalName, stats);
-      
+
       return transcriptionResult;
 
     } catch (error) {
@@ -770,16 +716,16 @@ class AudioTranscriptionService {
         file: originalName,
         error: error.message
       });
-      
+
       // Handle specific error cases
       if (error.message === 'EMPTY_AUDIO_FILE') {
         throw new Error('The uploaded audio file is empty. Please record audio content and try again.');
       }
-      
+
       if (error.message === 'INVALID_AUDIO_FILE') {
         throw new Error('The uploaded audio file appears to be invalid or corrupted. Please try recording again.');
       }
-      
+
       // For other errors, don't generate flashcards from placeholder text
       throw new Error(`Audio transcription failed: ${error.message}. Please try again with a valid audio recording.`);
     }
@@ -798,33 +744,33 @@ class AudioTranscriptionService {
     for (const service of services) {
       try {
         Logger.info(`Attempting transcription with ${service.name}`, { file: originalName });
-        
+
         const result = await this[service.method](filePath, originalName, stats);
-        
+
         Logger.info(`Transcription successful with ${service.name}`, {
           file: originalName,
           textLength: result.text.length
         });
-        
+
         return result;
-        
+
       } catch (error) {
         Logger.warn(`${service.name} transcription failed`, {
           file: originalName,
           error: error.message
         });
-        
+
         lastError = error;
         errorMessages.push(`${service.name}: ${error.message}`);
-        
+
         // Continue to next service for recoverable errors
-        if (error.message.includes('rate limit') || 
-            error.message.includes('429') ||
-            error.message.includes('Invalid API key') ||
-            error.message.includes('401')) {
+        if (error.message.includes('rate limit') ||
+          error.message.includes('429') ||
+          error.message.includes('Invalid API key') ||
+          error.message.includes('401')) {
           continue;
         }
-        
+
         // For file format errors, continue to next service
         if (error.message.includes('Invalid audio file format')) {
           continue;
@@ -927,32 +873,32 @@ class AudioTranscriptionService {
 
   async checkRateLimit(service) {
     const now = Date.now();
-    
+
     if (service === 'openai') {
       if (now - this.lastOpenAIRequest > this.rateLimitWindow) {
         this.openaiRequestCount = 0;
       }
-      
+
       if (this.openaiRequestCount >= this.maxRequestsPerMinute) {
         const waitTime = this.rateLimitWindow - (now - this.lastOpenAIRequest);
         Logger.warn(`OpenAI rate limit reached, waiting ${waitTime}ms`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
-      
+
       this.openaiRequestCount++;
       this.lastOpenAIRequest = now;
-      
+
     } else if (service === 'groq') {
       if (now - this.lastGroqRequest > this.rateLimitWindow) {
         this.groqRequestCount = 0;
       }
-      
+
       if (this.groqRequestCount >= this.maxRequestsPerMinute) {
         const waitTime = this.rateLimitWindow - (now - this.lastGroqRequest);
         Logger.warn(`Groq rate limit reached, waiting ${waitTime}ms`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
-      
+
       this.groqRequestCount++;
       this.lastGroqRequest = now;
     }
@@ -970,7 +916,7 @@ class AudioTranscriptionService {
       });
     }
 
-    const finalText = transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH 
+    const finalText = transcriptionText.length > CONFIG.MAX_CONTENT_LENGTH
       ? transcriptionText.substring(0, CONFIG.MAX_CONTENT_LENGTH) + '...[truncated]'
       : transcriptionText;
 
@@ -1034,7 +980,7 @@ class AudioTranscriptionService {
   static getTranscriptionStatus() {
     const groqStatus = process.env.GROQ_API_KEY ? '✅ Available' : '❌ Missing';
     const openaiStatus = process.env.OPENAI_API_KEY ? '✅ Available' : '❌ Missing';
-    
+
     return {
       groq: groqStatus,
       openai: openaiStatus,
@@ -1086,7 +1032,7 @@ const createErrorResponse = (error, message, details = null, debugInfo = {}) => 
 app.get('/', (req, res) => {
   const whisperStatus = AudioTranscriptionService.isTranscriptionAvailable();
   const supportedFormats = AudioTranscriptionService.getSupportedFormats();
-  
+
   res.json({
     message: '🚀 Flashcard Generator API v2.0',
     status: 'healthy',
@@ -1137,7 +1083,7 @@ app.get('/', (req, res) => {
 // Generate flashcards from text
 app.post('/generate-flashcards', async (req, res) => {
   try {
-    let { content } = req.body;
+    const { content, tone, quantity, level } = req.body;
 
     if (!content || content.trim().length === 0) {
       return res.status(400).json(createErrorResponse(
@@ -1154,7 +1100,9 @@ app.post('/generate-flashcards', async (req, res) => {
       ));
     }
 
-    const flashcards = await groqAI.generateFlashcards(content, 'text');
+    // Pass configuration to service
+    const config = { tone, quantity, level };
+    const flashcards = await groqAI.generateFlashcards(content, config, 'text');
 
     res.json(createSuccessResponse(flashcards, 'text', {
       contentLength: content.length
@@ -1177,13 +1125,13 @@ Logger.info('GROQ API Key status', { loaded: !!process.env.GROQ_API_KEY });
 // Generate flashcards from PDF
 app.post('/generate-flashcards/pdf', async (req, res) => {
   let filePath = null;
-  
+
   try {
     // Ensure upload middleware is initialized
     if (!upload) {
       upload = await createMulterConfig();
     }
-    
+
     upload.single('file')(req, res, async (err) => {
       if (err) {
         Logger.error('PDF upload error', { error: err.message });
@@ -1202,12 +1150,12 @@ app.post('/generate-flashcards/pdf', async (req, res) => {
         }
 
         filePath = req.file.path;
-        
+
         const { text, metadata: pdfMetadata } = await PDFProcessor.extractText(
-          filePath, 
+          filePath,
           req.file.originalname
         );
-        
+
         const flashcards = await groqAI.generateFlashcards(text, 'PDF'); // CORRECTED
 
         res.json(createSuccessResponse(flashcards, 'pdf', {
@@ -1217,11 +1165,11 @@ app.post('/generate-flashcards/pdf', async (req, res) => {
         }));
 
       } catch (error) {
-        Logger.error('PDF processing error', { 
+        Logger.error('PDF processing error', {
           file: req.file?.originalname,
-          error: error.message 
+          error: error.message
         });
-        
+
         res.status(500).json(createErrorResponse(
           'Failed to process PDF file',
           error.message,
@@ -1245,12 +1193,12 @@ app.post('/generate-flashcards/pdf', async (req, res) => {
 // Updated route for voice flashcard generation with better error handling
 app.post('/generate-flashcards/voice', async (req, res) => {
   let filePath = null;
-  
+
   try {
     if (!upload) {
       upload = await createMulterConfig();
     }
-    
+
     upload.single('file')(req, res, async (err) => {
       if (err) {
         Logger.error('Audio upload error', { error: err.message });
@@ -1269,25 +1217,25 @@ app.post('/generate-flashcards/voice', async (req, res) => {
         }
 
         filePath = req.file.path;
-        
+
         Logger.info('Starting enhanced audio transcription', {
           file: req.file.originalname,
           size: req.file.size,
           mimetype: req.file.mimetype
         });
-        
+
         const { text, metadata: audioMetadata } = await AudioTranscriptionService.transcribe(
-          filePath, 
+          filePath,
           req.file.originalname
         );
-        
+
         Logger.info('Audio transcription completed', {
           file: req.file.originalname,
           textLength: text.length,
           isPlaceholder: audioMetadata.isPlaceholder,
           engine: audioMetadata.transcriptionEngine
         });
-        
+
         // Generate flashcards even from placeholder text (it contains instructions)
         const flashcards = await groqAI.generateFlashcards(text, 'voice recording');
 
@@ -1312,15 +1260,15 @@ app.post('/generate-flashcards/voice', async (req, res) => {
         res.json(response);
 
       } catch (error) {
-        Logger.error('Voice processing error', { 
+        Logger.error('Voice processing error', {
           file: req.file?.originalname,
           error: error.message,
           stack: error.stack
         });
-        
+
         // Provide specific guidance based on error type
         let helpMessage = 'Please try recording again with clear audio';
-        
+
         if (error.message.includes('rate limit')) {
           helpMessage = 'API rate limit exceeded. Please wait 5-10 minutes and try again, or manually transcribe the audio content.';
         } else if (error.message.includes('Invalid API key')) {
@@ -1328,7 +1276,7 @@ app.post('/generate-flashcards/voice', async (req, res) => {
         } else if (error.message.includes('timeout')) {
           helpMessage = 'Audio file took too long to process. Try with a shorter recording or manual transcription.';
         }
-        
+
         res.status(500).json(createErrorResponse(
           'Failed to generate flashcards from voice recording',
           error.message,
@@ -1354,13 +1302,13 @@ app.post('/generate-flashcards/voice', async (req, res) => {
 
 // Enhanced error handling middleware
 app.use((error, req, res, next) => {
-  Logger.error('Unhandled error', { 
+  Logger.error('Unhandled error', {
     error: error.message,
     stack: error.stack,
     path: req.path,
     method: req.method
   });
-  
+
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json(createErrorResponse(
@@ -1376,7 +1324,7 @@ app.use((error, req, res, next) => {
       ));
     }
   }
-  
+
   if (error.code === 'INVALID_FILE_TYPE') {
     return res.status(400).json(createErrorResponse(
       'Invalid file type',
@@ -1384,7 +1332,7 @@ app.use((error, req, res, next) => {
       'Allowed types: PDF files, Audio files (WAV, MP3, M4A, OGG, WebM)'
     ));
   }
-  
+
   res.status(500).json(createErrorResponse(
     'Internal server error',
     'Something went wrong on our end. Please try again.',
@@ -1411,11 +1359,11 @@ app.use('*', (req, res) => {
 // Scheduled cleanup task
 const startCleanupTask = async () => {
   const uploadsDir = await FileManager.ensureUploadsDir();
-  
+
   setInterval(async () => {
     await FileManager.cleanupOldFiles(uploadsDir, 1); // Clean files older than 1 hour
   }, 30 * 60 * 1000); // Run every 30 minutes
-  
+
   Logger.info('Cleanup task started', { interval: '30 minutes', maxAge: '1 hour' });
 };
 
@@ -1424,11 +1372,11 @@ const startServer = async () => {
   try {
     await FileManager.ensureUploadsDir();
     await startCleanupTask();
-    
+
     // Validate API keys
     const groqStatus = process.env.GROQ_API_KEY ? '✅ Connected' : '❌ Missing';
     const whisperStatus = AudioTranscriptionService.isTranscriptionAvailable() ? '✅ Connected' : '⚠️  Missing (using fallback)'; // Fixed method name
-    
+
     app.listen(PORT, () => {
       Logger.info('🚀 Flashcard Generator API v2.0 Started Successfully!');
       Logger.info('Server configuration', {
@@ -1441,7 +1389,7 @@ const startServer = async () => {
         maxContentLength: CONFIG.MAX_CONTENT_LENGTH,
         maxFlashcards: CONFIG.MAX_FLASHCARDS
       });
-      
+
       if (!AudioTranscriptionService.isTranscriptionAvailable()) { // Fixed method name
         Logger.warn('⚠️  Audio transcription API keys not found. Audio transcription will use placeholder text.');
         Logger.warn('   To enable Whisper transcription, set GROQ_API_KEY or OPENAI_API_KEY environment variable.');
@@ -1456,7 +1404,7 @@ const startServer = async () => {
 // Graceful shutdown
 const gracefulShutdown = async () => {
   Logger.info('Shutting down server gracefully...');
-  
+
   try {
     const uploadsDir = await FileManager.ensureUploadsDir();
     await FileManager.cleanupOldFiles(uploadsDir, 0); // Clean all files
@@ -1464,7 +1412,7 @@ const gracefulShutdown = async () => {
   } catch (error) {
     Logger.warn('Could not clean up files', { error: error.message });
   }
-  
+
   Logger.info('Server stopped');
   process.exit(0);
 };
