@@ -14,14 +14,13 @@ const InputSection = ({
     recordingTime,
     isGenerating,
     connectionStatus,
-    triggerWiggle
+    triggerWiggle,
+    settings,
+    setSettings,
+    useCustomOptions,
+    setUseCustomOptions
 }) => {
     const [showSettings, setShowSettings] = useState(false);
-    const [settings, setSettings] = useState({
-        tone: 'Professional',
-        quantity: '10',
-        level: 'University'
-    });
 
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
@@ -72,52 +71,77 @@ There are two main types of photosynthetic processes: oxygenic photosynthesis an
 
                 {/* Settings Panel */}
                 {showSettings && (
-                    <div className="p-4 border-b border-white/5 bg-white/5 backdrop-blur-md animate-fade-in grid grid-cols-3 gap-4 rounded-t-xl mx-1 mt-1">
-                        <div>
-                            <label className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 block">Tone</label>
-                            <div className="relative">
-                                <select
-                                    value={settings.tone}
-                                    onChange={(e) => setSettings({ ...settings, tone: e.target.value })}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs text-white appearance-none focus:border-blue-500 focus:outline-none"
-                                >
-                                    <option>Simple</option>
-                                    <option>Professional</option>
-                                    <option>Academic</option>
-                                </select>
-                                <ChevronDown className="w-3 h-3 text-gray-500 absolute right-2 top-2 pointer-events-none" />
+                    <div className="p-4 border-b border-white/5 bg-white/5 backdrop-blur-md animate-fade-in rounded-t-xl mx-1 mt-1">
+                        {/* Custom Options Toggle */}
+                        <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/5">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-semibold text-white">Extra options</span>
+                                <span className="text-[10px] text-gray-400">Customize tone, quantity and level</span>
                             </div>
+                            <button
+                                onClick={() => setUseCustomOptions(!useCustomOptions)}
+                                className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${useCustomOptions ? 'bg-blue-600' : 'bg-gray-700'}`}
+                            >
+                                <span
+                                    className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${useCustomOptions ? 'translate-x-6' : 'translate-x-1'}`}
+                                />
+                            </button>
                         </div>
-                        <div>
-                            <label className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 block">Quantity</label>
-                            <div className="relative">
-                                <select
-                                    value={settings.quantity}
-                                    onChange={(e) => setSettings({ ...settings, quantity: e.target.value })}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs text-white appearance-none focus:border-blue-500 focus:outline-none"
-                                >
-                                    <option>5 Cards</option>
-                                    <option>10 Cards</option>
-                                    <option>20 Cards</option>
-                                </select>
-                                <ChevronDown className="w-3 h-3 text-gray-500 absolute right-2 top-2 pointer-events-none" />
+
+                        {/* Settings Grid - Only shown if useCustomOptions is true */}
+                        {useCustomOptions ? (
+                            <div className="grid grid-cols-3 gap-4 animate-scale-in">
+                                <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 block">Tone</label>
+                                    <div className="relative">
+                                        <select
+                                            value={settings.tone}
+                                            onChange={(e) => setSettings({ ...settings, tone: e.target.value })}
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs text-white appearance-none focus:border-blue-500 focus:outline-none"
+                                        >
+                                            <option>Simple</option>
+                                            <option>Professional</option>
+                                            <option>Academic</option>
+                                        </select>
+                                        <ChevronDown className="w-3 h-3 text-gray-500 absolute right-2 top-2 pointer-events-none" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 block">Quantity</label>
+                                    <div className="relative">
+                                        <select
+                                            value={settings.quantity}
+                                            onChange={(e) => setSettings({ ...settings, quantity: e.target.value })}
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs text-white appearance-none focus:border-blue-500 focus:outline-none"
+                                        >
+                                            <option value="5">5 Cards</option>
+                                            <option value="10">10 Cards</option>
+                                            <option value="20">20 Cards</option>
+                                        </select>
+                                        <ChevronDown className="w-3 h-3 text-gray-500 absolute right-2 top-2 pointer-events-none" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 block">Level</label>
+                                    <div className="relative">
+                                        <select
+                                            value={settings.level}
+                                            onChange={(e) => setSettings({ ...settings, level: e.target.value })}
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs text-white appearance-none focus:border-blue-500 focus:outline-none"
+                                        >
+                                            <option>High School</option>
+                                            <option>University</option>
+                                            <option>Expert</option>
+                                        </select>
+                                        <ChevronDown className="w-3 h-3 text-gray-500 absolute right-2 top-2 pointer-events-none" />
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 block">Level</label>
-                            <div className="relative">
-                                <select
-                                    value={settings.level}
-                                    onChange={(e) => setSettings({ ...settings, level: e.target.value })}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs text-white appearance-none focus:border-blue-500 focus:outline-none"
-                                >
-                                    <option>High School</option>
-                                    <option>University</option>
-                                    <option>Expert</option>
-                                </select>
-                                <ChevronDown className="w-3 h-3 text-gray-500 absolute right-2 top-2 pointer-events-none" />
+                        ) : (
+                            <div className="bg-white/5 border border-white/5 rounded-lg p-3 text-center">
+                                <p className="text-[10px] text-gray-500 italic">Using default settings: Professional, 10 cards, University level</p>
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
 
