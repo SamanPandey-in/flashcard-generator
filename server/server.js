@@ -1244,7 +1244,9 @@ app.post('/generate-flashcards/pdf', async (req, res) => {
           req.file.originalname
         );
 
-        const flashcards = await groqAI.generateFlashcards(text, 'PDF'); // CORRECTED
+        const { tone, quantity, level } = req.body;
+        const config = { tone, quantity, level };
+        const flashcards = await groqAI.generateFlashcards(text, config, 'pdf');
 
         res.json(createSuccessResponse(flashcards, 'pdf', {
           originalFile: req.file.originalname,
@@ -1325,7 +1327,9 @@ app.post('/generate-flashcards/voice', async (req, res) => {
         });
 
         // Generate flashcards even from placeholder text (it contains instructions)
-        const flashcards = await groqAI.generateFlashcards(text, 'voice recording');
+        const { tone, quantity, level } = req.body;
+        const config = { tone, quantity, level };
+        const flashcards = await groqAI.generateFlashcards(text, config, 'voice');
 
         // Enhanced response with transcription status
         const response = createSuccessResponse(flashcards, 'voice', {

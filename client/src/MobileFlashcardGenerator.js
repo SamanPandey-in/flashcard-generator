@@ -31,6 +31,15 @@ const MobileFlashcardGenerator = () => {
     level: 'University'
   });
 
+  const [useCustomOptions, setUseCustomOptions] = useState(() => {
+    const saved = localStorage.getItem('useCustomOptions');
+    return saved === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('useCustomOptions', useCustomOptions);
+  }, [useCustomOptions]);
+
   const fileInputRef = useRef(null);
   const recordingTimerRef = useRef(null);
 
@@ -80,6 +89,13 @@ const MobileFlashcardGenerator = () => {
       let response;
       let url;
 
+      // Determine which settings to use
+      const currentSettings = useCustomOptions ? settings : {
+        tone: 'Professional',
+        quantity: '10',
+        level: 'University'
+      };
+
       if (type === 'text') {
         url = `${API_URL}/generate-flashcards`;
         response = await fetch(url, {
@@ -90,14 +106,16 @@ const MobileFlashcardGenerator = () => {
           },
           body: JSON.stringify({
             content,
-            tone: settings.tone,
-            quantity: settings.quantity,
-            level: settings.level
+            ...currentSettings
           })
         });
       } else if (type === 'pdf' || type === 'voice') {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('tone', currentSettings.tone);
+        formData.append('quantity', currentSettings.quantity);
+        formData.append('level', currentSettings.level);
+
         url = `${API_URL}/generate-flashcards/${type}`;
         response = await fetch(url, {
           method: 'POST',
@@ -339,6 +357,8 @@ const MobileFlashcardGenerator = () => {
           triggerWiggle={triggerWiggle}
           settings={settings}
           setSettings={setSettings}
+          useCustomOptions={useCustomOptions}
+          setUseCustomOptions={setUseCustomOptions}
         />
 
         {isGenerating && <SkeletonLoader />}
