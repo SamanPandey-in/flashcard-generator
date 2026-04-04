@@ -16,7 +16,6 @@ const MobileFlashcardGenerator = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [audioChunks, setAudioChunks] = useState([]);
   const [error, setError] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('unknown');
   const [triggerWiggle, setTriggerWiggle] = useState(false);
@@ -37,11 +36,7 @@ const MobileFlashcardGenerator = () => {
 
   const API_URL = process.env.REACT_APP_API_URL || 'https://flashcard-generator-tvst.onrender.com';
 
-  useEffect(() => {
-    testConnection();
-  }, []);
-
-  const testConnection = async () => {
+  const testConnection = React.useCallback(async () => {
     try {
       console.log("Testing connection to:", API_URL);
       const response = await fetch(`${API_URL}/`, {
@@ -59,7 +54,11 @@ const MobileFlashcardGenerator = () => {
       setConnectionStatus('failed');
       setError(`Cannot connect to server at ${API_URL}.`);
     }
-  };
+  }, [API_URL]);
+
+  useEffect(() => {
+    testConnection();
+  }, [testConnection]);
 
   const showError = (message) => {
     setError(message);
@@ -206,7 +205,6 @@ const MobileFlashcardGenerator = () => {
       const recorder = new MediaRecorder(stream);
 
       setMediaRecorder(recorder);
-      setAudioChunks([]);
       setIsRecording(true);
       setRecordingTime(0);
       setError(null);
@@ -232,7 +230,6 @@ const MobileFlashcardGenerator = () => {
         }
 
         stream.getTracks().forEach(track => track.stop());
-        setAudioChunks([]);
       };
 
       recorder.start();

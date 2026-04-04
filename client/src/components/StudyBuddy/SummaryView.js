@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Copy, Check } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 const SummaryView = ({ summary, onClose }) => {
@@ -27,9 +27,9 @@ const SummaryView = ({ summary, onClose }) => {
                     <div className="text-gray-200 leading-relaxed">
                         <ReactMarkdown
                             components={{
-                                h1: ({ node, ...props }) => <h1 className="text-2xl font-bold text-white mb-4 mt-6" {...props} />,
-                                h2: ({ node, ...props }) => <h2 className="text-xl font-semibold text-blue-300 mb-3 mt-5" {...props} />,
-                                h3: ({ node, ...props }) => <h3 className="text-lg font-medium text-green-300 mb-2 mt-4" {...props} />,
+                                h1: ({ children, ...props }) => <h1 className="text-2xl font-bold text-white mb-4 mt-6" {...props}>{children}</h1>,
+                                h2: ({ children, ...props }) => <h2 className="text-xl font-semibold text-blue-300 mb-3 mt-5" {...props}>{children}</h2>,
+                                h3: ({ children, ...props }) => <h3 className="text-lg font-medium text-green-300 mb-2 mt-4" {...props}>{children}</h3>,
                                 ul: ({ node, ...props }) => <ul className="list-disc list-inside space-y-2 my-4 ml-2" {...props} />,
                                 ol: ({ node, ...props }) => <ol className="list-decimal list-inside space-y-2 my-4 ml-2" {...props} />,
                                 li: ({ node, ...props }) => <li className="text-gray-300" {...props} />,

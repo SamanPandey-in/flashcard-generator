@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CheckCircle, XCircle, Award } from 'lucide-react';
+import { CheckCircle, XCircle, Award } from 'lucide-react';
 
 const QuizView = ({ quiz, onClose }) => {
     const [currentQuestion, setCurrentQuestion] = useState(0);

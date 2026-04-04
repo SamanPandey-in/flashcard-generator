@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Loader2 } from 'lucide-react';
+import { Send, Bot, Loader2 } from 'lucide-react';
 
 const ChatInterface = ({ context, onClose }) => {
     const [messages, setMessages] = useState([
